@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { DOOR_STATUSES, STATUS_ORDER } from '../lib/constants'
+import { pushToGHL } from '../lib/ghl'
 
 export default function DoorModal({ door, mode, onSave, onClose }) {
   const [status, setStatus] = useState(door.status || 'no_answer')
   const [notes, setNotes] = useState(door.notes || '')
   const [saving, setSaving] = useState(false)
+  const [ghlPushing, setGhlPushing] = useState(false)
+  const [ghlResult, setGhlResult] = useState(null)
 
   const handleSave = async () => {
     setSaving(true)
@@ -12,6 +15,21 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
     setSaving(false)
   }
 
+  const handlePushToGHL = async () => {
+    setGhlPushing(true)
+    const result = await pushToGHL({
+      address: door.address,
+      solar: door.solar,
+      owner_name: door.owner_name,
+      rep_name: door.rep_name,
+      status,
+      notes,
+    })
+    setGhlResult(result)
+    setGhlPushing(false)
+  }
+
+  const isWarmLead = status === 'interested' || status === 'hot_lead'
   const solar = door.solar
   const owner = door.owner_name
   const proposal = door.proposal
@@ -167,6 +185,37 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
             }}
           />
         </div>
+
+        {/* GHL Push — shows for warm leads */}
+        {isWarmLead && (
+          <div style={{ marginBottom: 12 }}>
+            {ghlResult ? (
+              <div style={{
+                padding: '10px 14px', borderRadius: 10,
+                background: ghlResult.success ? '#052e16' : '#450a0a',
+                border: `1px solid ${ghlResult.success ? '#22c55e' : '#ef4444'}`,
+                fontSize: 13, color: ghlResult.success ? '#86efac' : '#fca5a5',
+                display: 'flex', alignItems: 'center', gap: 8
+              }}>
+                {ghlResult.success ? '✅ Pushed to GoHighLevel! Contact created.' : `❌ GHL error: ${ghlResult.error}`}
+              </div>
+            ) : (
+              <button
+                onClick={handlePushToGHL}
+                disabled={ghlPushing}
+                style={{
+                  width: '100%', padding: '11px', borderRadius: 10,
+                  background: '#0f2d4a', border: '1px solid #0ea5e9',
+                  color: '#38bdf8', fontSize: 14, fontWeight: 600,
+                  cursor: ghlPushing ? 'wait' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                }}
+              >
+                {ghlPushing ? 'Pushing...' : '⚡ Push to GoHighLevel'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 10 }}>
