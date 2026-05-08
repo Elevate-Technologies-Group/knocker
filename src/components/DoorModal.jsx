@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DOOR_STATUSES, STATUS_ORDER } from '../lib/constants'
 import { pushToGHL } from '../lib/ghl'
+import { generateProposal } from '../lib/proposal'
 
 export default function DoorModal({ door, mode, onSave, onClose }) {
   const [status, setStatus] = useState(door.status || 'no_answer')
@@ -8,11 +9,23 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
   const [saving, setSaving] = useState(false)
   const [ghlPushing, setGhlPushing] = useState(false)
   const [ghlResult, setGhlResult] = useState(null)
+  const [proposal, setProposal] = useState(door.proposal || null)
+  const [showProposal, setShowProposal] = useState(!!door.proposal)
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave({ status, notes })
+    await onSave({ status, notes, proposal })
     setSaving(false)
+  }
+
+  const handleGenerateProposal = () => {
+    const p = generateProposal({
+      solar: door.solar,
+      address: door.address,
+      owner_name: door.owner_name,
+    })
+    setProposal(p)
+    setShowProposal(true)
   }
 
   const handlePushToGHL = async () => {
@@ -32,132 +45,163 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
   const isWarmLead = status === 'interested' || status === 'hot_lead'
   const solar = door.solar
   const owner = door.owner_name
-  const proposal = door.proposal
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 500,
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)'
-    }}
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 500,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)'
+      }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div style={{
         width: '100%', maxWidth: 480,
-        background: '#0f172a',
-        border: '1px solid #1e293b',
+        background: '#0f172a', border: '1px solid #1e293b',
         borderRadius: '20px 20px 0 0',
         padding: '20px 20px 36px',
-        color: '#f1f5f9',
-        maxHeight: '90dvh',
-        overflowY: 'auto',
+        color: '#f1f5f9', maxHeight: '92dvh', overflowY: 'auto',
       }}>
         {/* Handle */}
-        <div style={{
-          width: 40, height: 4, background: '#334155',
-          borderRadius: 2, margin: '0 auto 16px'
-        }} />
+        <div style={{ width: 40, height: 4, background: '#334155', borderRadius: 2, margin: '0 auto 16px' }} />
 
         {/* Address + Owner */}
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-            📍 Address
-          </div>
-          <div style={{ fontSize: 14, color: '#cbd5e1', lineHeight: 1.4 }}>
-            {door.address}
-          </div>
-
-          {/* Owner name from county records */}
+          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>📍 Address</div>
+          <div style={{ fontSize: 14, color: '#cbd5e1', lineHeight: 1.4 }}>{door.address}</div>
           {owner ? (
             <div style={{
-              marginTop: 6, display: 'flex', alignItems: 'center', gap: 6,
-              background: '#1e293b', borderRadius: 8, padding: '6px 10px'
+              marginTop: 7, display: 'flex', alignItems: 'center', gap: 8,
+              background: '#1e293b', borderRadius: 8, padding: '7px 10px'
             }}>
-              <span style={{ fontSize: 13 }}>👤</span>
+              <span>👤</span>
               <div>
-                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{owner}</div>
+                <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>{owner}</div>
                 <div style={{ fontSize: 10, color: '#475569' }}>Property owner · County records</div>
               </div>
             </div>
           ) : (
-            <div style={{ marginTop: 4, fontSize: 11, color: '#334155', fontStyle: 'italic' }}>
-              Owner name not found in county records
-            </div>
+            <div style={{ fontSize: 11, color: '#334155', fontStyle: 'italic', marginTop: 4 }}>Owner name not found in county records</div>
           )}
-
           {mode === 'edit' && door.rep_name && (
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
+            <div style={{ fontSize: 11, color: '#475569', marginTop: 5 }}>
               Last knock: {door.rep_name} · {new Date(door.updated_at).toLocaleDateString()}
             </div>
           )}
         </div>
 
-        {/* Solar Data */}
-        {solar && (
+        {/* Solar summary */}
+        {solar && !showProposal && (
           <div style={{
             background: '#1e293b', borderRadius: 12, padding: '12px 14px',
             marginBottom: 14, border: '1px solid #f59e0b33'
           }}>
-            <div style={{ fontSize: 11, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-              ☀️ Solar Potential
-            </div>
+            <div style={{ fontSize: 11, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>☀️ Solar Potential</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
               <SolarStat label="Monthly Savings" value={`$${solar.monthlySavings}/mo`} highlight />
               <SolarStat label="Annual Savings" value={`$${solar.annualSavings}/yr`} highlight />
               <SolarStat label="System Size" value={`${solar.systemSizeKw} kW`} />
               <SolarStat label="Panels (~)" value={solar.panelCount} />
               <SolarStat label="Median Sun Hrs/Yr" value={solar.medianSunshineHours?.toLocaleString()} />
-              <SolarStat label="Roof Segments" value={solar.roofSegments} />
+              <SolarStat label="Realistic kWh/Yr" value={solar.realisticKwh?.toLocaleString()} />
             </div>
             {solar.bestPitch != null && (
               <div style={{ marginTop: 8, fontSize: 11, color: '#64748b' }}>
                 Best roof face: {solar.bestPitch}° pitch · {getAzimuthLabel(solar.bestAzimuth)}
               </div>
             )}
+            <button
+              onClick={handleGenerateProposal}
+              style={{
+                marginTop: 10, width: '100%', padding: '9px',
+                borderRadius: 9, background: '#1a2e1a',
+                border: '1px solid #22c55e55', color: '#4ade80',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              📋 Generate Full Proposal
+            </button>
           </div>
         )}
 
-        {/* Previous proposal */}
-        {proposal && (
+        {/* Full Proposal */}
+        {showProposal && proposal && (
           <div style={{
-            background: '#0f2a1e', borderRadius: 12, padding: '12px 14px',
-            marginBottom: 14, border: '1px solid #22c55e44'
+            background: '#0c1f0c', borderRadius: 12, padding: '14px',
+            marginBottom: 14, border: '1px solid #22c55e55'
           }}>
-            <div style={{ fontSize: 11, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-              📋 Solar Proposal
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 1 }}>📋 Solar Proposal</div>
+              <button onClick={() => setShowProposal(false)} style={{ background: 'none', border: 'none', color: '#475569', fontSize: 16, cursor: 'pointer' }}>×</button>
             </div>
-            <div style={{ fontSize: 13, color: '#86efac' }}>{proposal.systemKw} kW system</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-              Est. ${proposal.annualSavings}/yr savings · Generated {new Date(proposal.createdAt).toLocaleDateString()}
+
+            {/* Sun score bar */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+                <span>Roof Solar Score</span>
+                <span style={{ color: proposal.sunScore >= 70 ? '#4ade80' : proposal.sunScore >= 50 ? '#fbbf24' : '#f87171', fontWeight: 700 }}>
+                  {proposal.sunScore}/100
+                </span>
+              </div>
+              <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 3,
+                  width: `${proposal.sunScore}%`,
+                  background: proposal.sunScore >= 70 ? '#22c55e' : proposal.sunScore >= 50 ? '#f59e0b' : '#ef4444'
+                }} />
+              </div>
+            </div>
+
+            {/* System specs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', marginBottom: 12 }}>
+              <SolarStat label="System Size" value={`${proposal.systemKw} kW`} />
+              <SolarStat label="Panels" value={proposal.panelCount} />
+              <SolarStat label="Annual Production" value={`${proposal.annualKwh?.toLocaleString()} kWh`} />
+              <SolarStat label="Sun Hrs/Yr (median)" value={proposal.medianSunshineHours?.toLocaleString()} />
+            </div>
+
+            {/* Financial breakdown */}
+            <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10, marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>💰 Financials</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
+                <SolarStat label="Monthly Savings" value={`$${proposal.monthlySavings}`} highlight />
+                <SolarStat label="Annual Savings" value={`$${proposal.annualSavings}`} highlight />
+                <SolarStat label="Gross System Cost" value={`$${proposal.grossCost?.toLocaleString()}`} />
+                <SolarStat label="Fed Tax Credit (30%)" value={`-$${proposal.federalCredit?.toLocaleString()}`} />
+                <SolarStat label="Net Cost to Owner" value={`$${proposal.netCost?.toLocaleString()}`} />
+                <SolarStat label="Payback Period" value={`${proposal.paybackYears} yrs`} />
+                <SolarStat label="25-Yr Savings" value={`$${proposal.cumulativeSavings25yr?.toLocaleString()}`} highlight />
+                <SolarStat label="Net Lifetime Value" value={`$${proposal.netLifetimeSavings?.toLocaleString()}`} highlight />
+              </div>
+            </div>
+
+            {/* Environmental */}
+            <div style={{ borderTop: '1px solid #1e293b', paddingTop: 10 }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>🌿 Environmental Impact / Year</div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>
+                {proposal.annualCo2Kg?.toLocaleString()} kg CO₂ offset · {proposal.treesEquivalent} trees equivalent
+              </div>
             </div>
           </div>
         )}
 
         {/* Status Picker */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-            Status
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Status</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {STATUS_ORDER.map(key => {
               const s = DOOR_STATUSES[key]
               const active = status === key
               return (
-                <button
-                  key={key}
-                  onClick={() => setStatus(key)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: `2px solid ${active ? s.color : '#1e293b'}`,
-                    background: active ? s.bg : '#1e293b',
-                    color: active ? s.color : '#64748b',
-                    fontSize: 14, fontWeight: active ? 600 : 400,
-                    cursor: 'pointer', textAlign: 'left',
-                    transition: 'all 0.15s',
-                    display: 'flex', alignItems: 'center', gap: 10
-                  }}
-                >
+                <button key={key} onClick={() => setStatus(key)} style={{
+                  padding: '10px 14px', borderRadius: 10,
+                  border: `2px solid ${active ? s.color : '#1e293b'}`,
+                  background: active ? s.bg : '#1e293b',
+                  color: active ? s.color : '#64748b',
+                  fontSize: 14, fontWeight: active ? 600 : 400,
+                  cursor: 'pointer', textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10
+                }}>
                   <span style={{ fontSize: 16 }}>{s.emoji}</span>
                   {s.label}
                 </button>
@@ -167,10 +211,8 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
         </div>
 
         {/* Notes */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-            Notes
-          </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Notes</div>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
@@ -180,8 +222,7 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
               width: '100%', padding: '10px 12px',
               background: '#1e293b', border: '1px solid #334155',
               borderRadius: 10, color: '#f1f5f9', fontSize: 13,
-              resize: 'none', outline: 'none', boxSizing: 'border-box',
-              fontFamily: 'inherit'
+              resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit'
             }}
           />
         </div>
@@ -195,9 +236,10 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
                 background: ghlResult.success ? '#052e16' : '#450a0a',
                 border: `1px solid ${ghlResult.success ? '#22c55e' : '#ef4444'}`,
                 fontSize: 13, color: ghlResult.success ? '#86efac' : '#fca5a5',
-                display: 'flex', alignItems: 'center', gap: 8
               }}>
-                {ghlResult.success ? '✅ Pushed to GoHighLevel! Contact created.' : `❌ GHL error: ${ghlResult.error}`}
+                {ghlResult.success
+                  ? `✅ Pushed to GHL! Contact + opportunity created in Knocker pipeline.`
+                  : `❌ GHL error: ${ghlResult.error}`}
               </div>
             ) : (
               <button
@@ -217,30 +259,19 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
           </div>
         )}
 
-        {/* Buttons */}
+        {/* Save / Cancel */}
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={onClose}
-            style={{
-              flex: 1, padding: '13px', borderRadius: 12,
-              border: '1px solid #334155', background: '#1e293b',
-              color: '#94a3b8', fontSize: 15, cursor: 'pointer'
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              flex: 2, padding: '13px', borderRadius: 12,
-              border: 'none',
-              background: DOOR_STATUSES[status]?.color || '#6366f1',
-              color: '#fff', fontSize: 15, fontWeight: 600,
-              cursor: saving ? 'wait' : 'pointer',
-              opacity: saving ? 0.7 : 1
-            }}
-          >
+          <button onClick={onClose} style={{
+            flex: 1, padding: '13px', borderRadius: 12,
+            border: '1px solid #334155', background: '#1e293b',
+            color: '#94a3b8', fontSize: 15, cursor: 'pointer'
+          }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{
+            flex: 2, padding: '13px', borderRadius: 12, border: 'none',
+            background: DOOR_STATUSES[status]?.color || '#6366f1',
+            color: '#fff', fontSize: 15, fontWeight: 600,
+            cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1
+          }}>
             {saving ? 'Saving...' : mode === 'create' ? 'Log Door' : 'Update'}
           </button>
         </div>
@@ -253,12 +284,8 @@ function SolarStat({ label, value, highlight }) {
   return (
     <div>
       <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>{label}</div>
-      <div style={{
-        fontSize: highlight ? 15 : 13,
-        fontWeight: highlight ? 700 : 500,
-        color: highlight ? '#fbbf24' : '#e2e8f0'
-      }}>
-        {value || '—'}
+      <div style={{ fontSize: highlight ? 15 : 13, fontWeight: highlight ? 700 : 500, color: highlight ? '#fbbf24' : '#e2e8f0' }}>
+        {value ?? '—'}
       </div>
     </div>
   )
@@ -270,7 +297,7 @@ function getAzimuthLabel(deg) {
   if (deg < 68) return 'NE facing'
   if (deg < 112) return 'E facing'
   if (deg < 158) return 'SE facing'
-  if (deg < 202) return '✅ S facing'
+  if (deg < 202) return '✅ S facing (best)'
   if (deg < 248) return 'SW facing'
   if (deg < 292) return 'W facing'
   return 'NW facing'

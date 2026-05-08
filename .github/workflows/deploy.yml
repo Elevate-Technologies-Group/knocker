@@ -26,6 +26,9 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_GOOGLE_MAPS_KEY: ${{ secrets.VITE_GOOGLE_MAPS_KEY }}
+          VITE_GHL_KEY: ${{ secrets.VITE_GHL_KEY }}
+          VITE_GHL_LOC: ${{ secrets.VITE_GHL_LOC }}
+          VITE_GHL_PIPELINE: ${{ secrets.VITE_GHL_PIPELINE }}
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
