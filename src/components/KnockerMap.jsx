@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Circle, Popup, useMapEvents, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getDoors, subscribeToDoorsSession, reverseGeocode, getSolarData, logDoor } from '../lib/api'
@@ -22,82 +22,72 @@ function makeDoorIcon(status) {
   const s = DOOR_STATUSES[status] || DOOR_STATUSES.no_answer
   return L.divIcon({
     html: `<div style="width:28px;height:28px;border-radius:50%;background:${s.pinColor};border:2.5px solid white;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 0 8px ${s.pinColor}88;cursor:pointer;">${s.emoji}</div>`,
-    className: '',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    className: '', iconSize: [28, 28], iconAnchor: [14, 14],
   })
 }
 
-function makeHouseDotIcon(address) {
+function makeHouseDotIcon() {
   return L.divIcon({
-    html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.7);border:1.5px solid rgba(255,255,255,0.9);box-shadow:0 1px 4px rgba(0,0,0,0.6);cursor:pointer;"></div>`,
-    className: '',
-    iconSize: [10, 10],
-    iconAnchor: [5, 5],
+    html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.75);border:1.5px solid rgba(255,255,255,0.95);box-shadow:0 1px 4px rgba(0,0,0,0.6);cursor:pointer;"></div>`,
+    className: '', iconSize: [10, 10], iconAnchor: [5, 5],
   })
 }
 
-// Fetch nearby house addresses from OpenStreetMap Overpass API
 async function fetchNearbyHouses(bounds) {
   const { _southWest: sw, _northEast: ne } = bounds
-  const query = `
-    [out:json][timeout:10];
-    (
-      node["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng});
-      way["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng});
-    );
-    out center 200;
-  `
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    body: query,
-  })
+  const query = `[out:json][timeout:10];(node["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng});way["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng}););out center 200;`
+  const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query })
   const data = await res.json()
   return data.elements.map(el => {
     const lat = el.lat ?? el.center?.lat
     const lng = el.lon ?? el.center?.lon
-    const tags = el.tags || {}
-    const num = tags['addr:housenumber'] || ''
-    const street = tags['addr:street'] || ''
-    const city = tags['addr:city'] || ''
-    const addr = [num, street, city].filter(Boolean).join(' ')
+    const t = el.tags || {}
+    const addr = [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(' ')
     return { lat, lng, address: addr || `${lat?.toFixed(5)}, ${lng?.toFixed(5)}` }
   }).filter(h => h.lat && h.lng)
 }
 
-// GPS blue dot component
-function GpsMarker({ onLocationFound }) {
+// GPS blue dot — auto-centers ONCE on first location, then lets user scroll freely
+function GpsMarker() {
   const map = useMap()
   const markerRef = useRef(null)
+  const hasCenteredRef = useRef(false)
 
   useEffect(() => {
-    map.locate({ watch: true, enableHighAccuracy: true, setView: true, maxZoom: 18 })
-
-    map.on('locationfound', (e) => {
-      if (markerRef.current) markerRef.current.setLatLng(e.latlng)
-      onLocationFound && onLocationFound(e.latlng)
-    })
-
-    return () => { map.stopLocate() }
-  }, [map])
-
-  const gpsIcon = L.divIcon({
-    html: `
-      <div style="position:relative;width:20px;height:20px;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(59,130,246,0.25);animation:gps-pulse 2s infinite;"></div>
+    const gpsIcon = L.divIcon({
+      html: `<div style="position:relative;width:20px;height:20px;">
+        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(59,130,246,0.2);animation:gps-pulse 2s infinite;"></div>
         <div style="position:absolute;inset:3px;border-radius:50%;background:#3b82f6;border:2.5px solid white;box-shadow:0 0 8px rgba(59,130,246,0.8);"></div>
       </div>
-      <style>@keyframes gps-pulse{0%,100%{transform:scale(1);opacity:0.6}50%{transform:scale(2.2);opacity:0}}</style>
-    `,
-    className: '',
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  })
+      <style>@keyframes gps-pulse{0%,100%{transform:scale(1);opacity:0.5}50%{transform:scale(2.5);opacity:0}}</style>`,
+      className: '', iconSize: [20, 20], iconAnchor: [10, 10],
+    })
 
-  return <Marker ref={markerRef} position={[0, 0]} icon={gpsIcon} zIndexOffset={1000} />
+    const marker = L.marker([0, 0], { icon: gpsIcon, zIndexOffset: 1000 })
+    markerRef.current = marker
+
+    map.locate({ watch: true, enableHighAccuracy: true })
+
+    map.on('locationfound', (e) => {
+      marker.setLatLng(e.latlng)
+      if (!marker._map) marker.addTo(map)
+      // Only pan to location on FIRST fix — after that user controls the map freely
+      if (!hasCenteredRef.current) {
+        map.setView(e.latlng, 18, { animate: true })
+        hasCenteredRef.current = true
+      }
+    })
+
+    return () => {
+      map.stopLocate()
+      marker.remove()
+    }
+  }, [map])
+
+  return null
 }
 
-// House dots layer — renders when zoom >= 17
+// House dots — loads when zoom >= 17, debounced 800ms after movement stops
 function HouseDotsLayer({ doors, onHouseTap }) {
   const map = useMap()
   const [houses, setHouses] = useState([])
@@ -106,23 +96,22 @@ function HouseDotsLayer({ doors, onHouseTap }) {
   const loggedAddresses = new Set(doors.map(d => d.address))
 
   const fetchHouses = useCallback(async () => {
-    const z = map.getZoom()
-    if (z < 17) { setHouses([]); return }
+    if (map.getZoom() < 17) { setHouses([]); return }
     try {
-      const bounds = map.getBounds()
-      const results = await fetchNearbyHouses(bounds)
+      const results = await fetchNearbyHouses(map.getBounds())
       setHouses(results)
-    } catch (e) {
-      console.warn('Overpass fetch failed', e)
-    }
+    } catch (e) { console.warn('Overpass error:', e) }
   }, [map])
 
   useMapEvents({
     moveend: () => {
       const z = map.getZoom()
       setZoom(z)
-      clearTimeout(fetchTimeout.current)
-      fetchTimeout.current = setTimeout(fetchHouses, 600)
+      if (z >= 17) {
+        clearTimeout(fetchTimeout.current)
+        // 800ms debounce — user must "settle" on an area before we load dots
+        fetchTimeout.current = setTimeout(fetchHouses, 800)
+      }
     },
     zoomend: () => {
       const z = map.getZoom()
@@ -138,23 +127,20 @@ function HouseDotsLayer({ doors, onHouseTap }) {
   if (zoom < 17) return null
 
   return houses.map((house, i) => {
-    const isLogged = loggedAddresses.has(house.address)
-    if (isLogged) return null // logged doors show their own colored pin
+    if (loggedAddresses.has(house.address)) return null
     return (
       <Marker
-        key={`house-${i}`}
+        key={`h-${i}`}
         position={[house.lat, house.lng]}
-        icon={makeHouseDotIcon(house.address)}
-        eventHandlers={{
-          click: () => onHouseTap(house)
-        }}
+        icon={makeHouseDotIcon()}
+        eventHandlers={{ click: () => onHouseTap(house) }}
       />
     )
   })
 }
 
-function MapClickHandler({ onMapClick }) {
-  useMapEvents({ click: onMapClick })
+function MapClickHandler({ onMapClick, disabled }) {
+  useMapEvents({ click: disabled ? () => {} : onMapClick })
   return null
 }
 
@@ -171,11 +157,11 @@ export default function KnockerMap({ repName, sessionId }) {
   const [selectedDoor, setSelectedDoor] = useState(null)
   const [pendingPin, setPendingPin] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [mapCenter] = useState([33.4484, -112.0740])
   const [showTeam, setShowTeam] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [toast, setToast] = useState(null)
   const [panTarget, setPanTarget] = useState(null)
+  const modalOpen = !!(pendingPin || selectedDoor)
 
   useEffect(() => {
     getDoors(sessionId).then(setDoors).catch(console.error)
@@ -205,7 +191,6 @@ export default function KnockerMap({ repName, sessionId }) {
     setTimeout(() => setToast(null), 3000)
   }
 
-  // Tapping a pre-loaded house dot
   const handleHouseTap = async (house) => {
     setLoading(true)
     try {
@@ -218,15 +203,12 @@ export default function KnockerMap({ repName, sessionId }) {
     setLoading(false)
   }
 
-  // Tapping blank map area
   const handleMapClick = async (e) => {
+    if (modalOpen) return
     const { lat, lng } = e.latlng
     setLoading(true)
     try {
-      const [address, solar] = await Promise.all([
-        reverseGeocode(lat, lng),
-        getSolarData(lat, lng)
-      ])
+      const [address, solar] = await Promise.all([reverseGeocode(lat, lng), getSolarData(lat, lng)])
       const ownerInfo = await getHomeownerInfo(lat, lng, address)
       setPendingPin({ lat, lng, address, solar, owner_name: ownerInfo?.owner || null })
     } catch (err) { console.error(err) }
@@ -239,7 +221,8 @@ export default function KnockerMap({ repName, sessionId }) {
       setPendingPin(null)
       showToast(`✅ ${DOOR_STATUSES[doorData.status]?.label} saved`)
     } catch (err) {
-      showToast('❌ Failed to save', 'error')
+      console.error('Save error:', err)
+      showToast('❌ Failed to save: ' + (err.message || err.code || 'unknown'), 'error')
     }
   }
 
@@ -259,6 +242,7 @@ export default function KnockerMap({ repName, sessionId }) {
       setSelectedDoor(null)
       showToast('✅ Updated')
     } catch (err) {
+      console.error('Update error:', err)
       showToast('❌ Failed to update', 'error')
     }
   }
@@ -274,32 +258,25 @@ export default function KnockerMap({ repName, sessionId }) {
       />
 
       <MapContainer
-        center={mapCenter}
+        center={[33.4484, -112.0740]}
         zoom={17}
         style={{ width: '100%', height: '100%' }}
-        zoomControl={true}
+        // zoom controls bottom-right so they don't show under modal
+        zoomControl={false}
       >
-        {/* Satellite base layer */}
-        <TileLayer
-          url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-          attribution="&copy; Google"
-          maxZoom={22}
-        />
-        {/* Hybrid overlay: roads, labels, city names, state lines */}
-        <TileLayer
-          url="https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}"
-          opacity={0.85}
-          maxZoom={22}
-        />
+        {/* Satellite + hybrid label overlay */}
+        <TileLayer url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" attribution="&copy; Google" maxZoom={22} />
+        <TileLayer url="https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}" opacity={0.85} maxZoom={22} />
+
+        {/* Zoom control — bottom right, away from modal slide-up area */}
+        <ZoomBottomRight />
 
         <GpsMarker />
-        <MapClickHandler onMapClick={handleMapClick} />
+        <MapClickHandler onMapClick={handleMapClick} disabled={modalOpen} />
         <PanController target={panTarget} />
 
-        {/* House dots from OSM (renders at zoom 17+) */}
         <HouseDotsLayer doors={doors} onHouseTap={handleHouseTap} />
 
-        {/* Logged door pins */}
         {doors.map(door => (
           <Marker
             key={door.id}
@@ -310,7 +287,6 @@ export default function KnockerMap({ repName, sessionId }) {
           />
         ))}
 
-        {/* Pending pin */}
         {pendingPin && (
           <Marker
             position={[pendingPin.lat, pendingPin.lng]}
@@ -322,38 +298,37 @@ export default function KnockerMap({ repName, sessionId }) {
         )}
       </MapContainer>
 
+      {/* Status legend — bottom left */}
       <StatusLegend doors={doors} />
+
+      {/* Overlays */}
       {showTeam && <TeamPanel doors={doors} onClose={() => setShowTeam(false)} />}
       {showHistory && (
         <HistoryScreen
           repName={repName}
           onClose={() => setShowHistory(false)}
-          onSelectDoor={(door) => {
-            setShowHistory(false)
-            handleMarkerClick(door)
-          }}
+          onSelectDoor={(door) => { setShowHistory(false); handleMarkerClick(door) }}
         />
       )}
 
       {loading && (
         <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%,-50%)',
+          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
           background: 'rgba(15,23,42,0.9)', color: '#fff',
           padding: '12px 24px', borderRadius: 12, fontSize: 14,
-          backdropFilter: 'blur(8px)', zIndex: 1000
+          backdropFilter: 'blur(8px)', zIndex: 1000, pointerEvents: 'none'
         }}>Loading...</div>
       )}
 
       {toast && (
         <div style={{
-          position: 'absolute', bottom: 100, left: '50%',
-          transform: 'translateX(-50%)',
+          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
           background: toast.type === 'error' ? '#450a0a' : '#052e16',
           color: toast.type === 'error' ? '#fca5a5' : '#86efac',
           padding: '10px 20px', borderRadius: 10, fontSize: 14,
           border: `1px solid ${toast.type === 'error' ? '#ef4444' : '#22c55e'}`,
-          zIndex: 1000, whiteSpace: 'nowrap'
+          zIndex: 1000, whiteSpace: 'nowrap', maxWidth: '90vw',
+          overflow: 'hidden', textOverflow: 'ellipsis'
         }}>{toast.msg}</div>
       )}
 
@@ -365,4 +340,15 @@ export default function KnockerMap({ repName, sessionId }) {
       )}
     </div>
   )
+}
+
+// Zoom control placed bottom-right so it's never under the modal slide-up
+function ZoomBottomRight() {
+  const map = useMap()
+  useEffect(() => {
+    const ctrl = L.control.zoom({ position: 'bottomright' })
+    ctrl.addTo(map)
+    return () => ctrl.remove()
+  }, [map])
+  return null
 }

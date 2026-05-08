@@ -8,10 +8,10 @@ export default function HistoryScreen({ repName, onClose, onSelectDoor }) {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    getRepHistory(repName).then(d => {
-      setDoors(d)
-      setLoading(false)
-    })
+    setLoading(true)
+    getRepHistory(repName)
+      .then(d => { setDoors(d); setLoading(false) })
+      .catch(err => { console.error(err); setLoading(false) })
   }, [repName])
 
   const filtered = filter === 'all' ? doors : doors.filter(d => d.status === filter)

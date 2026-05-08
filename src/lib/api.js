@@ -122,21 +122,30 @@ export async function getHomeownerInfo(lat, lng, address) {
 }
 
 export async function logDoor({ lat, lng, address, status, notes, rep_name, session_id, owner_name, proposal }) {
+  // Build the row cleanly — only include fields that exist in schema
+  const row = {
+    lat,
+    lng,
+    address,
+    status,
+    notes: notes || '',
+    rep_name: rep_name || 'Unknown',
+    session_id: session_id || 'default',
+    owner_name: owner_name || null,
+    proposal: proposal || null,
+    updated_at: new Date().toISOString(),
+  }
+
   const { data, error } = await supabase
     .from('doors')
-    .upsert({
-      lat, lng, address, status,
-      notes: notes || '',
-      rep_name: rep_name || 'Unknown',
-      session_id: session_id || 'default',
-      owner_name: owner_name || null,
-      proposal: proposal || null,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'address' })
+    .upsert(row, { onConflict: 'address', ignoreDuplicates: false })
     .select()
     .single()
 
-  if (error) throw error
+  if (error) {
+    console.error('logDoor error:', error)
+    throw error
+  }
   return data
 }
 
@@ -155,7 +164,10 @@ export async function getRepHistory(rep_name) {
     .eq('rep_name', rep_name)
     .order('updated_at', { ascending: false })
     .limit(200)
-  if (error) throw error
+  if (error) {
+    console.error('getRepHistory error:', error)
+    throw error
+  }
   return data || []
 }
 
