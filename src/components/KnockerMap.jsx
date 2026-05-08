@@ -8,6 +8,8 @@ import DoorModal from './DoorModal'
 import StatusLegend from './StatusLegend'
 import TopBar from './TopBar'
 import TeamPanel from './TeamPanel'
+import HistoryScreen from './HistoryScreen'
+import { getHomeownerInfo } from '../lib/api'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -171,6 +173,7 @@ export default function KnockerMap({ repName, sessionId }) {
   const [loading, setLoading] = useState(false)
   const [mapCenter] = useState([33.4484, -112.0740])
   const [showTeam, setShowTeam] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [toast, setToast] = useState(null)
   const [panTarget, setPanTarget] = useState(null)
 
@@ -206,8 +209,11 @@ export default function KnockerMap({ repName, sessionId }) {
   const handleHouseTap = async (house) => {
     setLoading(true)
     try {
-      const solar = await getSolarData(house.lat, house.lng)
-      setPendingPin({ ...house, solar })
+      const [solar, ownerInfo] = await Promise.all([
+        getSolarData(house.lat, house.lng),
+        getHomeownerInfo(house.lat, house.lng, house.address)
+      ])
+      setPendingPin({ ...house, solar, owner_name: ownerInfo?.owner || null })
     } catch (e) { console.error(e) }
     setLoading(false)
   }
@@ -221,7 +227,8 @@ export default function KnockerMap({ repName, sessionId }) {
         reverseGeocode(lat, lng),
         getSolarData(lat, lng)
       ])
-      setPendingPin({ lat, lng, address, solar })
+      const ownerInfo = await getHomeownerInfo(lat, lng, address)
+      setPendingPin({ lat, lng, address, solar, owner_name: ownerInfo?.owner || null })
     } catch (err) { console.error(err) }
     setLoading(false)
   }
@@ -263,6 +270,7 @@ export default function KnockerMap({ repName, sessionId }) {
         sessionId={sessionId}
         doorCount={doors.length}
         onTeamToggle={() => setShowTeam(s => !s)}
+        onHistoryOpen={() => setShowHistory(true)}
       />
 
       <MapContainer
@@ -316,6 +324,16 @@ export default function KnockerMap({ repName, sessionId }) {
 
       <StatusLegend doors={doors} />
       {showTeam && <TeamPanel doors={doors} onClose={() => setShowTeam(false)} />}
+      {showHistory && (
+        <HistoryScreen
+          repName={repName}
+          onClose={() => setShowHistory(false)}
+          onSelectDoor={(door) => {
+            setShowHistory(false)
+            handleMarkerClick(door)
+          }}
+        />
+      )}
 
       {loading && (
         <div style={{

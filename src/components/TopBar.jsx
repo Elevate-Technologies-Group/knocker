@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { geocodeAddress } from '../lib/api'
 
-export default function TopBar({ repName, sessionId, doorCount, onTeamToggle }) {
+export default function TopBar({ repName, sessionId, doorCount, onTeamToggle, onHistoryOpen }) {
   const [search, setSearch] = useState('')
   const [searching, setSearching] = useState(false)
 
@@ -43,6 +43,16 @@ export default function TopBar({ repName, sessionId, doorCount, onTeamToggle }) 
         }}>
           {doorCount} doors
         </span>
+        <button
+          onClick={onHistoryOpen}
+          style={{
+            background: '#1e293b', border: '1px solid #334155',
+            color: '#94a3b8', padding: '5px 12px', borderRadius: 8,
+            fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap'
+          }}
+        >
+          📋 History
+        </button>
         <button
           onClick={onTeamToggle}
           style={{

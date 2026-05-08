@@ -13,6 +13,8 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
   }
 
   const solar = door.solar
+  const owner = door.owner_name
+  const proposal = door.proposal
 
   return (
     <div style={{
@@ -28,7 +30,9 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
         border: '1px solid #1e293b',
         borderRadius: '20px 20px 0 0',
         padding: '20px 20px 36px',
-        color: '#f1f5f9'
+        color: '#f1f5f9',
+        maxHeight: '90dvh',
+        overflowY: 'auto',
       }}>
         {/* Handle */}
         <div style={{
@@ -36,7 +40,7 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
           borderRadius: 2, margin: '0 auto 16px'
         }} />
 
-        {/* Address */}
+        {/* Address + Owner */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
             📍 Address
@@ -44,9 +48,28 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
           <div style={{ fontSize: 14, color: '#cbd5e1', lineHeight: 1.4 }}>
             {door.address}
           </div>
-          {door.rep_name && mode === 'edit' && (
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
-              Last updated by: {door.rep_name}
+
+          {/* Owner name from county records */}
+          {owner ? (
+            <div style={{
+              marginTop: 6, display: 'flex', alignItems: 'center', gap: 6,
+              background: '#1e293b', borderRadius: 8, padding: '6px 10px'
+            }}>
+              <span style={{ fontSize: 13 }}>👤</span>
+              <div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{owner}</div>
+                <div style={{ fontSize: 10, color: '#475569' }}>Property owner · County records</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 4, fontSize: 11, color: '#334155', fontStyle: 'italic' }}>
+              Owner name not found in county records
+            </div>
+          )}
+
+          {mode === 'edit' && door.rep_name && (
+            <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
+              Last knock: {door.rep_name} · {new Date(door.updated_at).toLocaleDateString()}
             </div>
           )}
         </div>
@@ -55,16 +78,39 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
         {solar && (
           <div style={{
             background: '#1e293b', borderRadius: 12, padding: '12px 14px',
-            marginBottom: 16, border: '1px solid #f59e0b33'
+            marginBottom: 14, border: '1px solid #f59e0b33'
           }}>
             <div style={{ fontSize: 11, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
               ☀️ Solar Potential
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
               <SolarStat label="Monthly Savings" value={`$${solar.monthlySavings}/mo`} highlight />
               <SolarStat label="Annual Savings" value={`$${solar.annualSavings}/yr`} highlight />
-              <SolarStat label="Sunshine Hrs/Yr" value={solar.sunshineHours?.toLocaleString()} />
-              <SolarStat label="Max Panels" value={solar.maxPanels} />
+              <SolarStat label="System Size" value={`${solar.systemSizeKw} kW`} />
+              <SolarStat label="Panels (~)" value={solar.panelCount} />
+              <SolarStat label="Median Sun Hrs/Yr" value={solar.medianSunshineHours?.toLocaleString()} />
+              <SolarStat label="Roof Segments" value={solar.roofSegments} />
+            </div>
+            {solar.bestPitch != null && (
+              <div style={{ marginTop: 8, fontSize: 11, color: '#64748b' }}>
+                Best roof face: {solar.bestPitch}° pitch · {getAzimuthLabel(solar.bestAzimuth)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Previous proposal */}
+        {proposal && (
+          <div style={{
+            background: '#0f2a1e', borderRadius: 12, padding: '12px 14px',
+            marginBottom: 14, border: '1px solid #22c55e44'
+          }}>
+            <div style={{ fontSize: 11, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+              📋 Solar Proposal
+            </div>
+            <div style={{ fontSize: 13, color: '#86efac' }}>{proposal.systemKw} kW system</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              Est. ${proposal.annualSavings}/yr savings · Generated {new Date(proposal.createdAt).toLocaleDateString()}
             </div>
           </div>
         )}
@@ -74,7 +120,7 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
           <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
             Status
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {STATUS_ORDER.map(key => {
               const s = DOOR_STATUSES[key]
               const active = status === key
@@ -105,7 +151,7 @@ export default function DoorModal({ door, mode, onSave, onClose }) {
         {/* Notes */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-            Notes (optional)
+            Notes
           </div>
           <textarea
             value={notes}
@@ -159,7 +205,7 @@ function SolarStat({ label, value, highlight }) {
     <div>
       <div style={{ fontSize: 10, color: '#64748b', marginBottom: 2 }}>{label}</div>
       <div style={{
-        fontSize: highlight ? 16 : 14,
+        fontSize: highlight ? 15 : 13,
         fontWeight: highlight ? 700 : 500,
         color: highlight ? '#fbbf24' : '#e2e8f0'
       }}>
@@ -167,4 +213,16 @@ function SolarStat({ label, value, highlight }) {
       </div>
     </div>
   )
+}
+
+function getAzimuthLabel(deg) {
+  if (deg == null) return ''
+  if (deg <= 22 || deg >= 338) return 'N facing'
+  if (deg < 68) return 'NE facing'
+  if (deg < 112) return 'E facing'
+  if (deg < 158) return 'SE facing'
+  if (deg < 202) return '✅ S facing'
+  if (deg < 248) return 'SW facing'
+  if (deg < 292) return 'W facing'
+  return 'NW facing'
 }
