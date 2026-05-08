@@ -93,32 +93,25 @@ export async function getSolarData(lat, lng) {
   return null
 }
 
-// Homeowner name scraper — uses free county assessor data via Regrid API (free tier)
-// and falls back to OpenAddresses/Pelias. No cost for light usage.
+// Homeowner name lookup — queries county assessor data via server-side edge function
+// Falls back gracefully if unavailable (owner name field stays empty)
 export async function getHomeownerInfo(lat, lng, address) {
   try {
-    // Regrid free tier: parcel data including owner name from county records
-    // No API key needed for basic lookups (rate limited)
     const res = await fetch(
-      `https://app.regrid.com/api/v1/parcel/geopoint?lat=${lat}&lon=${lng}&return_custom=false&return_field_labels=false&return_matched_key=false&return_nearest=true`,
-      { headers: { 'Accept': 'application/json' } }
+      `https://rxfpsuczmkhxetmzbppb.supabase.co/functions/v1/parcel-lookup?lat=${lat}&lng=${lng}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        }
+      }
     )
-    if (!res.ok) throw new Error('Regrid unavailable')
+    if (!res.ok) return { owner: null }
     const data = await res.json()
-    const parcel = data.parcels?.features?.[0]?.properties?.fields
-    if (parcel) {
-      const owner = parcel.owner || parcel.ownernme1 || parcel.own_name || null
-      const mailingAddr = parcel.mail_address || parcel.mailadd || null
-      const yearBuilt = parcel.yearbuilt || parcel.yr_blt || null
-      const sqft = parcel.ll_gisacre ? Math.round(parcel.ll_gisacre * 43560) : (parcel.sqft || null)
-      return { owner, mailingAddr, yearBuilt, sqft, source: 'county' }
-    }
+    return { owner: data.owner || null, source: data.source || null }
   } catch (e) {
-    console.warn('Parcel lookup failed:', e)
+    console.warn('Owner lookup failed:', e)
+    return { owner: null }
   }
-
-  // Fallback: try OpenAddresses via geocode (gets address only, no owner)
-  return { owner: null, mailingAddr: null, yearBuilt: null, sqft: null, source: null }
 }
 
 export async function logDoor({ lat, lng, address, status, notes, rep_name, session_id, owner_name, proposal }) {

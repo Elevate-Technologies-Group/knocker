@@ -28,8 +28,16 @@ function makeDoorIcon(status) {
 
 function makeHouseDotIcon() {
   return L.divIcon({
-    html: `<div style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.75);border:1.5px solid rgba(255,255,255,0.95);box-shadow:0 1px 4px rgba(0,0,0,0.6);cursor:pointer;"></div>`,
-    className: '', iconSize: [10, 10], iconAnchor: [5, 5],
+    // Larger hollow ring — easy to tap, doesn't block the house underneath
+    html: `<div style="
+      width:20px;height:20px;border-radius:50%;
+      background:rgba(255,255,255,0.12);
+      border:2.5px solid rgba(255,255,255,0.85);
+      box-shadow:0 0 6px rgba(0,0,0,0.5);
+      cursor:pointer;
+      box-sizing:border-box;
+    "></div>`,
+    className: '', iconSize: [20, 20], iconAnchor: [10, 10],
   })
 }
 
