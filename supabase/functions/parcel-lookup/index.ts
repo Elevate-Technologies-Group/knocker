@@ -29,6 +29,8 @@ serve(async (req) => {
     await tryMaricopa(lat, lng) ??
     await tryPima(lat, lng) ??
     await tryMassachusetts(lat, lng) ??
+    await trySouthCarolina(lat, lng) ??
+    await tryVirginia(lat, lng) ??
     await tryArcGISNational(lat, lng)
 
   return new Response(JSON.stringify(result ?? { owner: null }), {
@@ -171,7 +173,155 @@ async function tryPima(lat: number, lng: number) {
   return null
 }
 
-// ── National fallback: ESRI USA Parcels (public layer, ~70% US coverage) ─────
+// ── South Carolina — Multi-county routing ────────────────────────────────────
+// SC has no statewide layer; route by bounding box to confirmed county endpoints
+async function trySouthCarolina(lat: number, lng: number) {
+  // Approximate county bounding boxes for confirmed endpoints
+  const routes = [
+    // York County (Rock Hill, Fort Mill, Clover, Tega Cay) — richest SC endpoint
+    {
+      bounds: { minLat: 34.7, maxLat: 35.2, minLng: -81.4, maxLng: -80.7 },
+      url: 'https://services1.arcgis.com/2AGLxyiJoNiVHKwq/arcgis/rest/services/Parcels/FeatureServer/0',
+      ownerField: 'Owner1',
+      extraFields: 'Owner1,Owner2,YearBuilt,FinishedSQFT,AsdTotVal,AprTotVal,PropertyAddress,LandUseDesc,TAXMAPID,SalePrice',
+      yearBuiltField: 'YearBuilt',
+      sqftField: 'FinishedSQFT',
+      valueField: 'AprTotVal',
+    },
+    // Horry County (Myrtle Beach area)
+    {
+      bounds: { minLat: 33.5, maxLat: 34.4, minLng: -79.4, maxLng: -78.5 },
+      url: 'https://www.horrycounty.org/gispublic/rest/services/Public/Parcels/MapServer/1',
+      ownerField: 'OwnerName',
+      extraFields: 'OwnerName,OwnerStreet,OwnerCity,OwnerState,OwnerZip,Acreage,LandUseCode,TMS',
+      yearBuiltField: null,
+      sqftField: null,
+      valueField: null,
+    },
+    // Greenville City (fallback for Greenville area)
+    {
+      bounds: { minLat: 34.7, maxLat: 35.0, minLng: -82.5, maxLng: -82.2 },
+      url: 'https://citygis.greenvillesc.gov/arcgis/rest/services/AddressSearch/Property/MapServer/3',
+      ownerField: 'OWNAM1',
+      extraFields: 'OWNAM1,OWNAM2,SQFEET,TAXMKTVAL,FAIRMKTVAL,PIN,STREET,STRNUM,BEDROOMS,BATHRMS',
+      yearBuiltField: null,
+      sqftField: 'SQFEET',
+      valueField: 'FAIRMKTVAL',
+    },
+  ]
+
+  for (const route of routes) {
+    const { bounds } = route
+    if (lat < bounds.minLat || lat > bounds.maxLat || lng < bounds.minLng || lng > bounds.maxLng) continue
+
+    try {
+      const params = new URLSearchParams({
+        geometry: `${lng},${lat}`,
+        geometryType: 'esriGeometryPoint',
+        inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects',
+        outFields: route.extraFields,
+        returnGeometry: 'false',
+        f: 'json',
+      })
+
+      const res = await fetch(`${route.url}/query?${params}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Knocker/1.0)' },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const attrs = data?.features?.[0]?.attributes
+      if (!attrs) continue
+
+      const owner = attrs[route.ownerField]
+      if (!owner) continue
+
+      return {
+        owner: cleanOwnerName(String(owner)),
+        source: 'south_carolina',
+        yearBuilt: route.yearBuiltField ? attrs[route.yearBuiltField] : null,
+        sqft: route.sqftField ? attrs[route.sqftField] : null,
+        totalVal: route.valueField ? attrs[route.valueField] : null,
+      }
+    } catch (e) {
+      console.warn('SC parcel lookup failed:', e)
+    }
+  }
+  return null
+}
+
+// ── Virginia — Multi-locality routing ────────────────────────────────────────
+// VA strips owner names from most public GIS layers; use confirmed localities
+async function tryVirginia(lat: number, lng: number) {
+  const routes = [
+    // Prince William County (Manassas, Woodbridge, Dumfries) — nightly updated ownership
+    {
+      bounds: { minLat: 38.4, maxLat: 38.85, minLng: -77.7, maxLng: -77.1 },
+      url: 'https://gisweb.pwcva.gov/arcgis/rest/services/GTS/Cadastral/MapServer/5',
+      ownerField: 'CAMA_OWNER_CUR',
+      extraFields: 'CAMA_OWNER_CUR,CAMA_ADDRESS2,CAMA_CITY,CAMA_STATE,CAMA_ZIPCODE,CAMA_USECODE,CAMA_SQFTABV,StreetNumber,StreetName,StreetType,City,ZipCode,SubdivisionName',
+      sqftField: 'CAMA_SQFTABV',
+    },
+    // Henrico County (Richmond suburbs) — rich CAMA data, no owner (return building data anyway)
+    {
+      bounds: { minLat: 37.4, maxLat: 37.7, minLng: -77.7, maxLng: -77.2 },
+      url: 'https://portal.henrico.gov/mapping/rest/services/Layers/Tax_Parcels_and_CAMA_Data_External/FeatureServer/0',
+      ownerField: null, // No owner in public layer — return building data only
+      extraFields: 'FULL_ADDRESS,YEAR_BUILT,SQFT_FINISHED,SQFT_BUILDING_FOOTPRINT,NUMBER_BEDROOMS,NUMBER_FULL_BATHS,HOUSE_STYLE_DESCRIPTION,LAND_VALUE_CURRENT,IMPROVEMENTS_VALUE_CURRENT,LAST_SALE_DATE,LAST_SALE_PRICE,SUBDIVISION_NAME',
+      sqftField: 'SQFT_FINISHED',
+    },
+  ]
+
+  for (const route of routes) {
+    const { bounds } = route
+    if (lat < bounds.minLat || lat > bounds.maxLat || lng < bounds.minLng || lng > bounds.maxLng) continue
+
+    try {
+      const params = new URLSearchParams({
+        geometry: `${lng},${lat}`,
+        geometryType: 'esriGeometryPoint',
+        inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects',
+        outFields: route.extraFields,
+        returnGeometry: 'false',
+        f: 'json',
+      })
+
+      const res = await fetch(`${route.url}/query?${params}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Knocker/1.0)' },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const attrs = data?.features?.[0]?.attributes
+      if (!attrs) continue
+
+      const ownerRaw = route.ownerField ? attrs[route.ownerField] : null
+      // Return result even without owner if we got building data
+      const hasUsefulData = ownerRaw || attrs['YEAR_BUILT'] || attrs['SQFT_FINISHED']
+      if (!hasUsefulData) continue
+
+      return {
+        owner: ownerRaw ? cleanOwnerName(String(ownerRaw)) : null,
+        source: 'virginia',
+        yearBuilt: attrs['YEAR_BUILT'] || null,
+        sqft: route.sqftField ? attrs[route.sqftField] : null,
+        totalVal: attrs['IMPROVEMENTS_VALUE_CURRENT']
+          ? (attrs['LAND_VALUE_CURRENT'] || 0) + attrs['IMPROVEMENTS_VALUE_CURRENT']
+          : null,
+        style: attrs['HOUSE_STYLE_DESCRIPTION'] || null,
+        bedrooms: attrs['NUMBER_BEDROOMS'] || null,
+        baths: attrs['NUMBER_FULL_BATHS'] || null,
+      }
+    } catch (e) {
+      console.warn('VA parcel lookup failed:', e)
+    }
+  }
+  return null
+}
+
+// ── National fallback: ESRI USA Parcels (~70% US coverage) ───────────────────
 async function tryArcGISNational(lat: number, lng: number) {
   try {
     const params = new URLSearchParams({
