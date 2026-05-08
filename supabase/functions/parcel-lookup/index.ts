@@ -28,6 +28,7 @@ serve(async (req) => {
   const result =
     await tryMaricopa(lat, lng) ??
     await tryPima(lat, lng) ??
+    await tryMassachusetts(lat, lng) ??
     await tryArcGISNational(lat, lng)
 
   return new Response(JSON.stringify(result ?? { owner: null }), {
@@ -81,6 +82,51 @@ async function tryMaricopa(lat: number, lng: number) {
     }
   } catch (e) {
     console.warn('Maricopa lookup failed:', e)
+  }
+  return null
+}
+
+// ── Massachusetts (MassGIS statewide parcel layer) ───────────────────────────
+// Confirmed working: all 351 MA cities/towns, no auth, updated ~monthly
+async function tryMassachusetts(lat: number, lng: number) {
+  try {
+    const params = new URLSearchParams({
+      geometry: `${lng},${lat}`,
+      geometryType: 'esriGeometryPoint',
+      inSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects',
+      outFields: 'OWNER1,OWN_ADDR,OWN_CITY,OWN_STATE,OWN_ZIP,SITE_ADDR,CITY,ZIP,TOTAL_VAL,YEAR_BUILT,BLD_AREA,RES_AREA,STYLE,USE_CODE,LS_DATE,LS_PRICE,MAP_PAR_ID',
+      returnGeometry: 'false',
+      f: 'json',
+    })
+
+    const res = await fetch(
+      `https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/Massachusetts_Property_Tax_Parcels/FeatureServer/0/query?${params}`,
+      {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Knocker/1.0)' },
+        signal: AbortSignal.timeout(6000),
+      }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const attrs = data?.features?.[0]?.attributes
+    if (!attrs) return null
+
+    const owner = attrs.OWNER1
+    if (!owner) return null
+
+    return {
+      owner: cleanOwnerName(String(owner)),
+      source: 'massachusetts',
+      yearBuilt: attrs.YEAR_BUILT,
+      sqft: attrs.RES_AREA || attrs.BLD_AREA,
+      totalVal: attrs.TOTAL_VAL,
+      style: attrs.STYLE,
+      lastSaleDate: attrs.LS_DATE,
+      lastSalePrice: attrs.LS_PRICE,
+    }
+  } catch (e) {
+    console.warn('Massachusetts parcel lookup failed:', e)
   }
   return null
 }

@@ -30,14 +30,14 @@ function makeHouseDotIcon() {
   return L.divIcon({
     // Larger hollow ring — easy to tap, doesn't block the house underneath
     html: `<div style="
-      width:38px;height:38px;border-radius:50%;
-      background:rgba(99,102,241,0.18);
-      border:3px solid rgba(255,255,255,0.95);
-      box-shadow:0 0 8px rgba(0,0,0,0.55), 0 0 0 1px rgba(99,102,241,0.4);
+      width:29px;height:29px;border-radius:50%;
+      background:rgba(99,102,241,0.15);
+      border:2.5px solid rgba(255,255,255,0.95);
+      box-shadow:0 0 7px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.35);
       cursor:pointer;
       box-sizing:border-box;
     "></div>`,
-    className: '', iconSize: [38, 38], iconAnchor: [19, 19],
+    className: '', iconSize: [29, 29], iconAnchor: [14, 14],
   })
 }
 
