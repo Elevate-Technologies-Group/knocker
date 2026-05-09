@@ -1,9 +1,20 @@
 import { useState } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import KnockerMap from './components/KnockerMap'
+import ManagerApp from './manager/ManagerApp'
 
 const SESSION_ID = 'elevate-' + new Date().toISOString().split('T')[0]
 
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<RepView />} />
+      <Route path="/manager/*" element={<ManagerApp />} />
+    </Routes>
+  )
+}
+
+function RepView() {
   const [repName, setRepName] = useState(() => localStorage.getItem('knocker_rep') || '')
   const [nameInput, setNameInput] = useState('')
   const [sessionInput, setSessionInput] = useState(SESSION_ID)
@@ -88,6 +99,17 @@ export default function App() {
           >
             Start Knocking →
           </button>
+
+          <div style={{
+            marginTop: 20, paddingTop: 16, borderTop: '1px solid #334155',
+            textAlign: 'center'
+          }}>
+            <a href="/manager" style={{
+              fontSize: 12, color: '#64748b', textDecoration: 'none'
+            }}>
+              Manager Portal →
+            </a>
+          </div>
         </div>
       </div>
     )

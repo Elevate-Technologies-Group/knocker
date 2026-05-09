@@ -15,11 +15,23 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const url = new URL(req.url)
-  const lat = parseFloat(url.searchParams.get('lat') || '')
-  const lng = parseFloat(url.searchParams.get('lng') || '')
+  // Accept lat/lng from either POST JSON body or GET query string so any
+  // client (current iOS GET, web GET, future POST callers) keeps working.
+  let lat = NaN, lng = NaN
+  if (req.method === 'POST') {
+    try {
+      const body = await req.json()
+      lat = parseFloat(String(body?.lat))
+      lng = parseFloat(String(body?.lng))
+    } catch { /* fall through to query-string parse */ }
+  }
+  if (isNaN(lat) || isNaN(lng)) {
+    const url = new URL(req.url)
+    lat = parseFloat(url.searchParams.get('lat') || '')
+    lng = parseFloat(url.searchParams.get('lng') || '')
+  }
 
-  if (!lat || !lng) {
+  if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
     return new Response(JSON.stringify({ owner: null, error: 'missing lat/lng' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
