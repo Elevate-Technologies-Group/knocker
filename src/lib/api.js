@@ -2,6 +2,8 @@ import { supabase } from './supabase'
 
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY
 
+// ─── Geocoding ─────────────────────────────────────────────────────────────
+
 export async function geocodeAddress(address) {
   const res = await fetch(
     `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`
@@ -26,9 +28,8 @@ export async function reverseGeocode(lat, lng) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
 }
 
-// Solar API — uses solarPanelConfigs for realistic production (accounts for shading/orientation)
-// NOT maxArrayAnnualEnergyKwh (theoretical max). We pick the config closest to a typical
-// residential system size (8-12 panels) which reflects actual usable roof area.
+// ─── Solar API ──────────────────────────────────────────────────────────────
+
 export async function getSolarData(lat, lng) {
   try {
     const res = await fetch(
@@ -40,8 +41,6 @@ export async function getSolarData(lat, lng) {
     const sp = data.solarPotential
     const configs = sp.solarPanelConfigs || []
 
-    // Pick realistic config: ~20 panels or nearest available (not the theoretical max)
-    // This accounts for shading, orientation, usable roof area
     let chosenConfig = configs.length > 0
       ? configs.reduce((best, c) => {
           const target = 20
@@ -52,10 +51,8 @@ export async function getSolarData(lat, lng) {
     const realisticKwh = chosenConfig?.yearlyEnergyDcKwh || 0
     const panelCount = chosenConfig?.panelsCount || sp.maxArrayPanelsCount || 0
 
-    // Use median sunshine from wholeRoofStats (not max) for accurate hours
     const roofStats = sp.wholeRoofStats
     const sunshineQuantiles = roofStats?.sunshineQuantiles || []
-    // median = middle quantile (index 2 of 5)
     const medianSunshineKwhPerKw = sunshineQuantiles.length >= 3
       ? sunshineQuantiles[Math.floor(sunshineQuantiles.length / 2)]
       : sp.maxSunshineHoursPerYear || 0
@@ -63,12 +60,10 @@ export async function getSolarData(lat, lng) {
     const avgRate = 0.14
     const annualSavings = Math.round(realisticKwh * avgRate)
 
-    // Best roof segment: southish facing, pitched 15-40 degrees
     const segments = sp.roofSegmentStats || []
     const bestSegment = segments
       .filter(s => s.pitchDegrees > 5 && s.pitchDegrees < 55)
       .sort((a, b) => {
-        // Prefer south-facing (180°), penalize north (0°)
         const aScore = (b.stats?.sunshineQuantiles?.[2] || 0)
         const bScore = (a.stats?.sunshineQuantiles?.[2] || 0)
         return aScore - bScore
@@ -93,8 +88,8 @@ export async function getSolarData(lat, lng) {
   return null
 }
 
-// Homeowner name lookup — queries county assessor data via server-side edge function
-// Falls back gracefully if unavailable (owner name field stays empty)
+// ─── Homeowner lookup ───────────────────────────────────────────────────────
+
 export async function getHomeownerInfo(lat, lng, address) {
   try {
     const res = await fetch(
@@ -114,8 +109,17 @@ export async function getHomeownerInfo(lat, lng, address) {
   }
 }
 
-export async function logDoor({ lat, lng, address, status, notes, rep_name, session_id, owner_name, proposal }) {
-  // Build the row cleanly — only include fields that exist in schema
+// ─── Doors ─────────────────────────────────────────────────────────────────
+
+/**
+ * Upsert a door row + write a door_event row.
+ * user_id and team_id come from the caller (RepView resolves them from auth).
+ * Falls back to legacy rep_name / session_id write so old rows stay readable.
+ */
+export async function logDoor({
+  lat, lng, address, status, notes, rep_name, session_id,
+  owner_name, proposal, user_id, team_id, appointmentAt
+}) {
   const row = {
     lat,
     lng,
@@ -127,6 +131,8 @@ export async function logDoor({ lat, lng, address, status, notes, rep_name, sess
     owner_name: owner_name || null,
     proposal: proposal || null,
     updated_at: new Date().toISOString(),
+    ...(user_id ? { user_id } : {}),
+    ...(team_id ? { team_id } : {}),
   }
 
   const { data, error } = await supabase
@@ -139,12 +145,39 @@ export async function logDoor({ lat, lng, address, status, notes, rep_name, sess
     console.error('logDoor error:', error)
     throw error
   }
+
+  // Write the event log row (best-effort — don't block save on failure)
+  if (user_id && data?.id) {
+    const event = {
+      door_id: data.id,
+      user_id,
+      rep_name: rep_name || 'Unknown',
+      status,
+      notes: notes || null,
+      ...(appointmentAt ? { appointment_at: appointmentAt } : {}),
+    }
+    const { error: evErr } = await supabase.from('door_events').insert(event)
+    if (evErr) console.warn('door_events insert error (non-fatal):', evErr)
+  }
+
   return data
 }
 
-export async function getDoors(session_id) {
+/**
+ * Fetch doors. Scoping:
+ *  - team_id set  → fetch all doors with that team_id (team member view)
+ *  - user_id only → fetch doors belonging to this user (individual view)
+ *  - fallback     → session_id filter (legacy, no auth)
+ */
+export async function getDoors({ user_id, team_id, session_id } = {}) {
   let query = supabase.from('doors').select('*').order('updated_at', { ascending: false })
-  if (session_id) query = query.eq('session_id', session_id)
+  if (team_id) {
+    query = query.eq('team_id', team_id)
+  } else if (user_id) {
+    query = query.eq('user_id', user_id)
+  } else if (session_id) {
+    query = query.eq('session_id', session_id)
+  }
   const { data, error } = await query
   if (error) throw error
   return data || []
@@ -164,14 +197,45 @@ export async function getRepHistory(rep_name) {
   return data || []
 }
 
-export function subscribeToDoorsSession(session_id, callback) {
+/**
+ * Fetch event log for a specific door, newest first.
+ */
+export async function fetchDoorEvents(door_id) {
+  const { data, error } = await supabase
+    .from('door_events')
+    .select('*')
+    .eq('door_id', door_id)
+    .order('created_at', { ascending: false })
+  if (error) {
+    console.warn('fetchDoorEvents error:', error)
+    return []
+  }
+  return data || []
+}
+
+// ─── Realtime ───────────────────────────────────────────────────────────────
+
+/**
+ * Subscribe to door changes.
+ * Filter by team_id when in team mode, user_id when individual, session_id legacy.
+ */
+export function subscribeToDoorsSession({ user_id, team_id, session_id }, callback) {
+  let filter
+  if (team_id) {
+    filter = `team_id=eq.${team_id}`
+  } else if (user_id) {
+    filter = `user_id=eq.${user_id}`
+  } else if (session_id) {
+    filter = `session_id=eq.${session_id}`
+  }
+
   return supabase
     .channel('doors-realtime')
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
       table: 'doors',
-      filter: session_id ? `session_id=eq.${session_id}` : undefined
+      filter
     }, callback)
     .subscribe()
 }

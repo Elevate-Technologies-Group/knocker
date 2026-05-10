@@ -2,14 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { getDoors, subscribeToDoorsSession, reverseGeocode, getSolarData, logDoor } from '../lib/api'
-import { DOOR_STATUSES, STATUS_ORDER } from '../lib/constants'
+import { getDoors, subscribeToDoorsSession, reverseGeocode, getSolarData, logDoor, getHomeownerInfo } from '../lib/api'
+import { DOOR_STATUSES, STATUS_ORDER, normaliseStatus } from '../lib/constants'
 import DoorModal from './DoorModal'
 import StatusLegend from './StatusLegend'
 import TopBar from './TopBar'
 import TeamPanel from './TeamPanel'
-import HistoryScreen from './HistoryScreen'
-import { getHomeownerInfo } from '../lib/api'
+import PipelineView from './PipelineView'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -19,7 +18,7 @@ L.Icon.Default.mergeOptions({
 })
 
 function makeDoorIcon(status) {
-  const s = DOOR_STATUSES[status] || DOOR_STATUSES.no_answer
+  const s = DOOR_STATUSES[normaliseStatus(status)] || DOOR_STATUSES.no_answer
   return L.divIcon({
     html: `<div style="width:28px;height:28px;border-radius:50%;background:${s.pinColor};border:2.5px solid white;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 0 8px ${s.pinColor}88;cursor:pointer;">${s.emoji}</div>`,
     className: '', iconSize: [28, 28], iconAnchor: [14, 14],
@@ -28,7 +27,6 @@ function makeDoorIcon(status) {
 
 function makeHouseDotIcon() {
   return L.divIcon({
-    // Larger hollow ring — easy to tap, doesn't block the house underneath
     html: `<div style="
       width:29px;height:29px;border-radius:50%;
       background:rgba(99,102,241,0.15);
@@ -79,7 +77,6 @@ function GpsMarker() {
     map.on('locationfound', (e) => {
       marker.setLatLng(e.latlng)
       if (!marker._map) marker.addTo(map)
-      // Only pan to location on FIRST fix — after that user controls the map freely
       if (!hasCenteredRef.current) {
         map.setView(e.latlng, 18, { animate: true })
         hasCenteredRef.current = true
@@ -117,7 +114,6 @@ function HouseDotsLayer({ doors, onHouseTap }) {
       setZoom(z)
       if (z >= 17) {
         clearTimeout(fetchTimeout.current)
-        // 800ms debounce — user must "settle" on an area before we load dots
         fetchTimeout.current = setTimeout(fetchHouses, 800)
       }
     },
@@ -160,23 +156,37 @@ function PanController({ target }) {
   return null
 }
 
-export default function KnockerMap({ repName, sessionId }) {
+/**
+ * KnockerMap — main rep view.
+ *
+ * Props:
+ *   repName   — display name
+ *   sessionId — legacy session_id (still written for backward compat)
+ *   userId    — auth user UUID (null in legacy mode)
+ *   teamId    — team UUID if user is on a team (null = individual)
+ *   teamName  — team display name
+ *   onSignOut — callback to sign out
+ */
+export default function KnockerMap({ repName, sessionId, userId, teamId, teamName, onSignOut }) {
   const [doors, setDoors] = useState([])
   const [selectedDoor, setSelectedDoor] = useState(null)
   const [pendingPin, setPendingPin] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showTeam, setShowTeam] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [showPipeline, setShowPipeline] = useState(false)
   const [toast, setToast] = useState(null)
   const [panTarget, setPanTarget] = useState(null)
   const modalOpen = !!(pendingPin || selectedDoor)
 
-  useEffect(() => {
-    getDoors(sessionId).then(setDoors).catch(console.error)
-  }, [sessionId])
+  // Scope params object — used for both fetch and realtime
+  const scope = { user_id: userId, team_id: teamId, session_id: sessionId }
 
   useEffect(() => {
-    const channel = subscribeToDoorsSession(sessionId, (payload) => {
+    getDoors(scope).then(setDoors).catch(console.error)
+  }, [userId, teamId, sessionId])
+
+  useEffect(() => {
+    const channel = subscribeToDoorsSession(scope, (payload) => {
       const { eventType, new: newRow, old: oldRow } = payload
       setDoors(prev => {
         if (eventType === 'INSERT') return [...prev, newRow]
@@ -186,7 +196,7 @@ export default function KnockerMap({ repName, sessionId }) {
       })
     })
     return () => channel.unsubscribe()
-  }, [sessionId])
+  }, [userId, teamId, sessionId])
 
   useEffect(() => {
     const handler = (e) => setPanTarget(e.detail)
@@ -223,11 +233,19 @@ export default function KnockerMap({ repName, sessionId }) {
     setLoading(false)
   }
 
-  const handleSaveDoor = async (doorData) => {
+  const handleSaveDoor = async ({ status, notes, proposal, appointmentAt }) => {
     try {
-      await logDoor({ ...pendingPin, ...doorData, rep_name: repName, session_id: sessionId })
+      await logDoor({
+        ...pendingPin,
+        status, notes, proposal,
+        rep_name: repName,
+        session_id: sessionId,
+        user_id: userId,
+        team_id: teamId,
+        appointmentAt
+      })
       setPendingPin(null)
-      showToast(`✅ ${DOOR_STATUSES[doorData.status]?.label} saved`)
+      showToast(`✅ ${DOOR_STATUSES[normaliseStatus(status)]?.label} saved`)
     } catch (err) {
       console.error('Save error:', err)
       showToast('❌ Failed to save: ' + (err.message || err.code || 'unknown'), 'error')
@@ -241,11 +259,17 @@ export default function KnockerMap({ repName, sessionId }) {
     setLoading(false)
   }
 
-  const handleUpdateDoor = async (doorData) => {
+  const handleUpdateDoor = async ({ status, notes, proposal, appointmentAt }) => {
     try {
       await logDoor({
         lat: selectedDoor.lat, lng: selectedDoor.lng, address: selectedDoor.address,
-        ...doorData, rep_name: repName, session_id: sessionId
+        owner_name: selectedDoor.owner_name,
+        status, notes, proposal,
+        rep_name: repName,
+        session_id: sessionId,
+        user_id: userId,
+        team_id: teamId,
+        appointmentAt
       })
       setSelectedDoor(null)
       showToast('✅ Updated')
@@ -260,29 +284,26 @@ export default function KnockerMap({ repName, sessionId }) {
       <TopBar
         repName={repName}
         sessionId={sessionId}
+        teamName={teamName}
         doorCount={doors.length}
         onTeamToggle={() => setShowTeam(s => !s)}
-        onHistoryOpen={() => setShowHistory(true)}
+        onHistoryOpen={() => setShowPipeline(true)}
+        onSignOut={onSignOut}
       />
 
       <MapContainer
         center={[33.4484, -112.0740]}
         zoom={17}
         style={{ width: '100%', height: '100%' }}
-        // zoom controls bottom-right so they don't show under modal
         zoomControl={false}
       >
-        {/* Satellite + hybrid label overlay */}
         <TileLayer url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" attribution="&copy; Google" maxZoom={22} />
         <TileLayer url="https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}" opacity={0.85} maxZoom={22} />
 
-        {/* Zoom control — bottom right, away from modal slide-up area */}
         <ZoomBottomRight />
-
         <GpsMarker />
         <MapClickHandler onMapClick={handleMapClick} disabled={modalOpen} />
         <PanController target={panTarget} />
-
         <HouseDotsLayer doors={doors} onHouseTap={handleHouseTap} />
 
         {doors.map(door => (
@@ -306,38 +327,28 @@ export default function KnockerMap({ repName, sessionId }) {
         )}
       </MapContainer>
 
-      {/* Status legend — bottom left */}
       <StatusLegend doors={doors} />
 
-      {/* Overlays */}
       {showTeam && <TeamPanel doors={doors} onClose={() => setShowTeam(false)} />}
-      {showHistory && (
-        <HistoryScreen
-          repName={repName}
-          onClose={() => setShowHistory(false)}
-          onSelectDoor={(door) => { setShowHistory(false); handleMarkerClick(door) }}
+
+      {showPipeline && (
+        <PipelineView
+          doors={doors}
+          onClose={() => setShowPipeline(false)}
+          onSelectDoor={(door) => { setShowPipeline(false); handleMarkerClick(door) }}
         />
       )}
 
       {loading && (
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-          background: 'rgba(15,23,42,0.9)', color: '#fff',
-          padding: '12px 24px', borderRadius: 12, fontSize: 14,
-          backdropFilter: 'blur(8px)', zIndex: 1000, pointerEvents: 'none'
-        }}>Loading...</div>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'rgba(15,23,42,0.9)', color: '#fff', padding: '12px 24px', borderRadius: 12, fontSize: 14, backdropFilter: 'blur(8px)', zIndex: 1000, pointerEvents: 'none' }}>
+          Loading...
+        </div>
       )}
 
       {toast && (
-        <div style={{
-          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: toast.type === 'error' ? '#450a0a' : '#052e16',
-          color: toast.type === 'error' ? '#fca5a5' : '#86efac',
-          padding: '10px 20px', borderRadius: 10, fontSize: 14,
-          border: `1px solid ${toast.type === 'error' ? '#ef4444' : '#22c55e'}`,
-          zIndex: 1000, whiteSpace: 'nowrap', maxWidth: '90vw',
-          overflow: 'hidden', textOverflow: 'ellipsis'
-        }}>{toast.msg}</div>
+        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'error' ? '#450a0a' : '#052e16', color: toast.type === 'error' ? '#fca5a5' : '#86efac', padding: '10px 20px', borderRadius: 10, fontSize: 14, border: `1px solid ${toast.type === 'error' ? '#ef4444' : '#22c55e'}`, zIndex: 1000, whiteSpace: 'nowrap', maxWidth: '90vw', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {toast.msg}
+        </div>
       )}
 
       {pendingPin && (
@@ -350,7 +361,6 @@ export default function KnockerMap({ repName, sessionId }) {
   )
 }
 
-// Zoom control placed bottom-right so it's never under the modal slide-up
 function ZoomBottomRight() {
   const map = useMap()
   useEffect(() => {
