@@ -2,8 +2,17 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import ManagerLogin from './ManagerLogin'
 import Dashboard from './Dashboard'
+import ErrorBoundary from './ErrorBoundary'
 
 export default function ManagerApp() {
+  return (
+    <ErrorBoundary>
+      <ManagerAppInner />
+    </ErrorBoundary>
+  )
+}
+
+function ManagerAppInner() {
   const [session, setSession] = useState(null)
   const [team, setTeam] = useState(null)
   const [role, setRole] = useState(null)
