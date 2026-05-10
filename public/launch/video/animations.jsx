@@ -356,7 +356,8 @@ function Stage({
     if (!stageRef.current) return;
     const el = stageRef.current;
     const measure = () => {
-      const barH = 44; // playback bar height
+      // Embedded build: no playback bar, so canvas can use the full height.
+      const barH = 0;
       const s = Math.min(
         el.clientWidth / width,
         (el.clientHeight - barH) / height
@@ -433,11 +434,11 @@ function Stage({
         position: 'absolute', inset: 0,
         display: 'flex', flexDirection: 'column',
         alignItems: 'center',
-        background: '#0a0a0a',
+        background: 'transparent',
         fontFamily: 'Inter, system-ui, sans-serif',
       }}
     >
-      {/* Canvas area — vertically centered in remaining space */}
+      {/* Canvas area — fills the iframe (playback bar removed for embed) */}
       <div style={{
         flex: 1,
         width: '100%',
@@ -454,7 +455,6 @@ function Stage({
             transform: `scale(${scale})`,
             transformOrigin: 'center',
             flexShrink: 0,
-            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
             overflow: 'hidden',
           }}
         >
@@ -463,18 +463,6 @@ function Stage({
           </TimelineContext.Provider>
         </div>
       </div>
-
-      {/* Playback bar — stacked below canvas, never overlapping */}
-      <PlaybackBar
-        time={displayTime}
-        actualTime={time}
-        duration={duration}
-        playing={playing}
-        onPlayPause={() => setPlaying(p => !p)}
-        onReset={() => { setTime(0); }}
-        onSeek={(t) => setTime(t)}
-        onHover={(t) => setHoverTime(t)}
-      />
     </div>
   );
 }
