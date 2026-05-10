@@ -12,7 +12,7 @@ export default function Support() {
       <h2 style={h2}>Contact</h2>
       <p>
         <strong>Email:</strong>{' '}
-        <a href="mailto:support@knocker.app" style={link}>support@knocker.app</a>
+        <a href="mailto:elevatetechnologiesgroup@gmail.com" style={link}>elevatetechnologiesgroup@gmail.com</a>
       </p>
       <p>
         Include your account email and a description of the issue. Screenshots
@@ -63,7 +63,7 @@ export default function Support() {
       </p>
       <p>
         You can also email{' '}
-        <a href="mailto:support@knocker.app" style={link}>support@knocker.app</a>{' '}
+        <a href="mailto:elevatetechnologiesgroup@gmail.com" style={link}>elevatetechnologiesgroup@gmail.com</a>{' '}
         from your account address to request deletion.
       </p>
 

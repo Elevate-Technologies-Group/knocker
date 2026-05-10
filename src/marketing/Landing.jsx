@@ -196,7 +196,7 @@ function ByTheNumbers() {
         </div>
         <a style={btnAmber} href="#download">Get Knocker for iOS →</a>
         <p style={{ marginTop: 20, fontSize: 13, color: 'rgba(250,250,247,0.6)' }}>
-          App Store launch coming soon. Reach out at <a href="mailto:support@knocker.app" style={{ color: '#F59E0B', textDecoration: 'underline' }}>support@knocker.app</a> for early-access details.
+          App Store launch coming soon. Reach out at <a href="mailto:elevatetechnologiesgroup@gmail.com" style={{ color: '#F59E0B', textDecoration: 'underline' }}>elevatetechnologiesgroup@gmail.com</a> for early-access details.
         </p>
       </div>
     </section>

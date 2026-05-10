@@ -110,7 +110,7 @@ export default function Privacy() {
         </li>
         <li>
           <strong>By email:</strong> send a deletion request to{' '}
-          <a href="mailto:support@knocker.app" style={link}>support@knocker.app</a>{' '}
+          <a href="mailto:elevatetechnologiesgroup@gmail.com" style={link}>elevatetechnologiesgroup@gmail.com</a>{' '}
           from the email associated with your account. We confirm and process
           within 7 business days.
         </li>
@@ -132,7 +132,7 @@ export default function Privacy() {
       <h2 style={h2}>Contact</h2>
       <p>
         Questions, requests, or complaints:{' '}
-        <a href="mailto:support@knocker.app" style={link}>support@knocker.app</a>.
+        <a href="mailto:elevatetechnologiesgroup@gmail.com" style={link}>elevatetechnologiesgroup@gmail.com</a>.
         We read every message.
       </p>
     </LegalLayout>
