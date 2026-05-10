@@ -46,22 +46,31 @@ function ManagerAppInner() {
 
     ;(async () => {
       try {
-        // Find any team where this user is manager/owner
-        const { data, error } = await supabase
+        const { data: memberships, error: mErr } = await supabase
           .from('team_members')
-          .select('team_id, role, teams(id, name, slug, owner_user_id)')
+          .select('team_id, role')
           .eq('user_id', session.user.id)
           .in('role', ['manager', 'owner'])
           .limit(1)
-
-        if (error) throw error
-        if (!data || data.length === 0) {
+        if (mErr) throw mErr
+        if (!memberships || memberships.length === 0) {
           setError("You're signed in, but this account isn't a manager or owner on any team. Contact your team owner if you should have access.")
           return
         }
 
-        setTeam(data[0].teams)
-        setRole(data[0].role)
+        const { data: t, error: tErr } = await supabase
+          .from('teams')
+          .select('id, name, slug, owner_user_id')
+          .eq('id', memberships[0].team_id)
+          .single()
+        if (tErr) throw tErr
+        if (!t) {
+          setError("Your team membership is set, but the team record isn't readable. Ask the team owner to re-invite you.")
+          return
+        }
+
+        setTeam(t)
+        setRole(memberships[0].role)
       } catch (e) {
         console.error('Manager check error:', e)
         setError(e.message || 'Could not verify manager access.')
@@ -94,6 +103,10 @@ function ManagerAppInner() {
         </button>
       </FullScreenMessage>
     )
+  }
+
+  if (!team) {
+    return <FullScreenMessage>Loading team…</FullScreenMessage>
   }
 
   return <Dashboard session={session} team={team} role={role} />
