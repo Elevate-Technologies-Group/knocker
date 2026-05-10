@@ -455,22 +455,19 @@ const launchFrame = {
   width: '100%',
   maxWidth: 720,
   margin: '0 auto',
-  aspectRatio: '1 / 1',
-  borderRadius: 24,
-  overflow: 'hidden',
-  background: '#0a0a0a',
-  boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 24px 80px rgba(15,23,42,0.18)'
+  aspectRatio: '1 / 1'
 }
 const launchIframe = {
   position: 'absolute', inset: 0,
   width: '100%', height: '100%',
   border: 0,
-  display: 'block'
+  display: 'block',
+  background: 'transparent'
 }
 const launchPlaceholder = {
   position: 'absolute', inset: 0,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  color: 'rgba(250,250,247,0.5)', fontSize: 14
+  color: '#94A3B8', fontSize: 14
 }
 
 const section = { padding: '32px 0 96px' }

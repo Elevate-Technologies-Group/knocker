@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Knocker — Launch Video</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0a0a0a; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #FAFAF7; }
   #root { position: fixed; inset: 0; }
   * { box-sizing: border-box; }
 </style>
@@ -74,7 +74,7 @@ function TimecodeLabel() {
 function App() {
   const [t] = useTweaks(TWEAK_DEFAULTS);
   return (
-    <Stage width={1080} height={1080} duration={30} background={t.background} persistKey="knocker-launch" loop={t.loopVideo}>
+    <Stage width={1080} height={1080} duration={23} background={t.background} persistKey="knocker-launch" loop={t.loopVideo}>
       <TimecodeLabel/>
       <TweaksHost/>
 
@@ -83,28 +83,23 @@ function App() {
         <SceneOpen/>
       </Sprite>
 
-      {/* Scene 2: Aerial map with status pins dropping in */}
-      <Sprite start={4} end={11}>
-        <SceneMap/>
-      </Sprite>
-
-      {/* Scene 3: 3D phone reveals map */}
-      <Sprite start={11} end={17.5}>
+      {/* Scene 2: 3D phone reveals map (was Scene 3, shifted -7s after SceneMap removed) */}
+      <Sprite start={4} end={10.5}>
         <ScenePhoneMap/>
       </Sprite>
 
-      {/* Scene 4: Log Door sheet, tap Interested */}
-      <Sprite start={17.5} end={24}>
+      {/* Scene 3: Log Door sheet, tap Interested */}
+      <Sprite start={10.5} end={17}>
         <SceneLogDoor/>
       </Sprite>
 
-      {/* Scene 5: Pipeline list */}
-      <Sprite start={24} end={27.5}>
+      {/* Scene 4: Pipeline list */}
+      <Sprite start={17} end={20.5}>
         <ScenePipeline/>
       </Sprite>
 
-      {/* Scene 6: Logo lockup */}
-      <Sprite start={27.5} end={30}>
+      {/* Scene 5: Logo lockup */}
+      <Sprite start={20.5} end={23}>
         <SceneLogo/>
       </Sprite>
     </Stage>
