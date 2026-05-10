@@ -2,13 +2,19 @@ import { useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import KnockerMap from './components/KnockerMap'
 import ManagerApp from './manager/ManagerApp'
+import Landing from './marketing/Landing'
+import Privacy from './marketing/Privacy'
+import Support from './marketing/Support'
 
 const SESSION_ID = 'elevate-' + new Date().toISOString().split('T')[0]
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<RepView />} />
+      <Route path="/" element={<Landing />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/support" element={<Support />} />
+      <Route path="/app" element={<RepView />} />
       <Route path="/manager/*" element={<ManagerApp />} />
     </Routes>
   )
