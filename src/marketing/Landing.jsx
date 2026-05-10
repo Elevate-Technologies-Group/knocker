@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
 export default function Landing() {
@@ -5,8 +6,8 @@ export default function Landing() {
     <div style={pageStyle}>
       <NavBar />
       <Hero />
+      <PhonesShowcase />
       <FeaturesSection />
-      <ScreenshotsSection />
       <ByTheNumbers />
       <Footer />
     </div>
@@ -20,7 +21,7 @@ function NavBar() {
         <Logo />
         <div style={navLinks}>
           <a href="#how" style={navLink}>How it works</a>
-          <a href="#screenshots" style={navLink}>Screens</a>
+          <a href="#solar" style={navLink}>Solar intelligence</a>
           <a href="#pricing" style={navLink}>Pricing</a>
           <Link to="/manager" style={navLink}>Manager portal</Link>
         </div>
@@ -52,7 +53,7 @@ function Hero() {
           everything forever.
         </p>
         <div style={heroCtas}>
-          <a id="download" style={btnAmber} href="#screenshots">Get Knocker for iOS →</a>
+          <a id="download" style={btnAmber} href="#how">Get Knocker for iOS →</a>
           <a href="#how" style={ghostLinkLarge}>See how it works →</a>
         </div>
         <div style={heroMeta}>
@@ -60,48 +61,76 @@ function Hero() {
           <span><strong style={heroMetaStrong}>6 county GIS sources</strong> chained for parcel data</span>
           <span><strong style={heroMetaStrong}>Google Solar API</strong> for honest sun estimates</span>
         </div>
-        <MapDemo />
       </div>
     </header>
   )
 }
 
-function MapDemo() {
-  return (
-    <div style={mapDemoStyle}>
-      <div style={mapPill}>North Phoenix · 142 properties</div>
-      {[
-        ['12%','32%'], ['18%','64%'], ['28%','28%'],
-        ['38%','80%'], ['64%','22%'], ['78%','60%']
-      ].map(([l,t], i) => (
-        <div key={i} style={{ ...houseDot, left: l, top: t }} />
-      ))}
-      <div style={{ ...mapPin, left: '22%', top: '48%', background: '#06b6d4', boxShadow: '0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(6,182,212,0.6)' }}>📅</div>
-      <div style={{ ...mapPin, left: '50%', top: '36%', background: '#22c55e', boxShadow: '0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(34,197,94,0.6)' }}>👍</div>
-      <div style={{ ...mapPin, left: '70%', top: '70%', background: '#f59e0b', boxShadow: '0 2px 8px rgba(0,0,0,0.4), 0 0 12px rgba(245,158,11,0.6)' }}>📞</div>
-      <div style={{ ...mapPin, left: '44%', top: '60%', background: '#94a3b8', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>🔘</div>
+function PhonesShowcase() {
+  const standingRef = useRef(null)
 
-      <div style={floatingCallout}>
-        <div style={ownerRow}>
-          <span style={{ fontSize: 14 }}>👤</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Maria Sandoval</div>
-            <div style={{ fontSize: 10, color: '#8E8E93' }}>Property owner · County records</div>
+  useEffect(() => {
+    const phone = standingRef.current
+    if (!phone) return
+
+    const baseRY = -14
+    let currentRY = baseRY
+    let lastScrollY = window.scrollY
+    let scrollDelta = 0
+    let raf = null
+
+    function tick() {
+      scrollDelta *= 0.92
+      const target = baseRY + scrollDelta
+      currentRY += (target - currentRY) * 0.12
+      phone.style.setProperty('--ry', currentRY.toFixed(2) + 'deg')
+      if (Math.abs(scrollDelta) > 0.05 || Math.abs(currentRY - baseRY) > 0.05) {
+        raf = requestAnimationFrame(tick)
+      } else {
+        raf = null
+      }
+    }
+
+    function onScroll() {
+      const y = window.scrollY
+      const dy = y - lastScrollY
+      lastScrollY = y
+      scrollDelta = Math.max(-22, Math.min(22, scrollDelta + dy * 0.18))
+      if (!raf) raf = requestAnimationFrame(tick)
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
+
+  return (
+    <section style={phonesSection}>
+      <style>{phonesCss}</style>
+      <div style={container}>
+        <div className="phones-stage">
+          <div ref={standingRef} className="phone phone--standing" style={{ '--ry': '-14deg' }}>
+            <div className="screen">
+              <img src="/screenshots/map.jpg" alt="Knocker iOS app · Map screen" />
+              <div className="notch" />
+              <div className="glare" />
+            </div>
+            <div className="shadow" />
           </div>
-        </div>
-        <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>2841 W Sweetwater Ave, Phoenix</div>
-        <div style={solarMini}>
-          <div>
-            <div style={solarMiniNum}>2,140</div>
-            <div style={solarMiniLbl}>Median Sun Hrs</div>
-          </div>
-          <div>
-            <div style={solarMiniNum}>11,820</div>
-            <div style={solarMiniLbl}>Realistic kWh/Yr</div>
+
+          <div className="phone phone--tabletop">
+            <div className="screen">
+              <img src="/screenshots/calendar.jpg" alt="Knocker iOS app · Calendar screen" />
+              <div className="notch" />
+              <div className="glare" />
+            </div>
+            <div className="shadow" />
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -128,8 +157,9 @@ function FeaturesSection() {
           <FeatureCard
             title="Disposition that means something."
             body="Six statuses: Appointment, Interested, Callback, Not Interested, No Answer, DQ. Pin color follows the status. Your map turns into a living heat map of who said what."
-            stat="📅 👍 📞 ❌ 🔘 ⛔️"
-          />
+          >
+            <DispositionPills />
+          </FeatureCard>
           <FeatureCard
             title="Pipeline that stays current."
             body="Every disposition rolls into a kanban automatically. No double-entry. No 'I'll log it tonight.' Tap a card to jump back to the door on the map."
@@ -141,40 +171,35 @@ function FeaturesSection() {
   )
 }
 
-function FeatureCard({ title, body, stat }) {
+function FeatureCard({ title, body, stat, children }) {
   return (
     <div style={featureCard}>
       <h3 style={featureTitle}>{title}</h3>
       <p style={featureBody}>{body}</p>
-      <span style={featureStat}>{stat}</span>
+      {children}
+      {stat && <span style={featureStat}>{stat}</span>}
     </div>
   )
 }
 
-function ScreenshotsSection() {
-  const shots = [
-    { src: '/screenshots/map.jpg',           caption: 'Every house, mapped.',                      label: 'Map' },
-    { src: '/screenshots/door-profile.jpg',  caption: 'Owner + solar in one tap.',                 label: 'Door modal' },
-    { src: '/screenshots/pipeline.jpg',      caption: 'Your pipeline at a glance.',                label: 'Pipeline' },
-    { src: '/screenshots/calendar.jpg',      caption: 'This week’s appointments, scheduled.', label: 'Calendar' },
-    { src: '/screenshots/history.jpg',       caption: 'Every visit, remembered.',                  label: 'History' },
-    { src: '/screenshots/appointment-time.jpg', caption: 'Pick a time, it’s on your week.',  label: 'Schedule' }
+function DispositionPills() {
+  const dispos = [
+    { label: 'Appointment',    color: '#06b6d4' },
+    { label: 'Interested',     color: '#22c55e' },
+    { label: 'Callback',       color: '#f59e0b' },
+    { label: 'Not Interested', color: '#ef4444' },
+    { label: 'No Answer',      color: '#94a3b8' },
+    { label: 'DQ',             color: '#475569' }
   ]
   return (
-    <section id="screenshots" style={{ ...section, background: '#FFFFFF', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
-      <div style={container}>
-        <h2 style={h2Style}>What it looks like in the field.</h2>
-        <p style={sectionLead}>Real screenshots from the iOS app. Phoenix sample data, Apple Maps satellite tiles.</p>
-        <div style={screenshotsGrid}>
-          {shots.map(s => (
-            <figure key={s.src} style={screenshotFig}>
-              <img src={s.src} alt={s.label} style={screenshotImg} />
-              <figcaption style={screenshotCap}>{s.caption}</figcaption>
-            </figure>
-          ))}
-        </div>
-      </div>
-    </section>
+    <div style={dispoPills}>
+      {dispos.map(d => (
+        <span key={d.label} style={dispoPill}>
+          <span style={{ ...dispoSwatch, background: d.color }} />
+          {d.label}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -273,7 +298,7 @@ const btnAmber = {
 }
 const ghostLinkLarge = { fontSize: 15, fontWeight: 500, color: '#1E293B', textDecoration: 'none' }
 
-const heroStyle = { padding: '88px 0 96px' }
+const heroStyle = { padding: '88px 0 32px' }
 const eyebrow = { fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#F59E0B', marginBottom: 18 }
 const displayHeading = { fontSize: 'clamp(48px, 9vw, 88px)', fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.02, margin: '0 0 24px' }
 const leadCopy = { fontSize: 'clamp(17px, 2vw, 22px)', color: '#475569', maxWidth: 720, lineHeight: 1.5, margin: '0 0 32px' }
@@ -281,47 +306,103 @@ const heroCtas = { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wr
 const heroMeta = { display: 'flex', gap: 24, marginTop: 24, fontSize: 13, color: '#64748B', flexWrap: 'wrap' }
 const heroMetaStrong = { color: '#0A0A0A', fontWeight: 600 }
 
-const mapDemoStyle = {
-  background: 'linear-gradient(135deg, #2c4a3a 0%, #1a2c2e 60%, #15252b 100%)',
-  borderRadius: 24, padding: 36, marginTop: 64,
-  boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 24px 80px rgba(15,23,42,0.18)',
-  position: 'relative', overflow: 'hidden', minHeight: 460,
-  backgroundImage: `linear-gradient(135deg, #2c4a3a 0%, #1a2c2e 60%, #15252b 100%), linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)`,
-  backgroundSize: 'auto, 36px 36px, 36px 36px'
-}
-const mapPill = {
-  position: 'absolute', top: 24, left: 24,
-  background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)',
-  padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, color: '#0A0A0A'
-}
-const houseDot = {
-  position: 'absolute', width: 18, height: 18,
-  border: '2px solid #fff', background: 'rgba(99,102,241,0.4)', borderRadius: '50%'
-}
-const mapPin = {
-  position: 'absolute', width: 36, height: 36, borderRadius: '50%',
-  border: '3px solid #fff',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  fontSize: 17, color: '#fff'
-}
-const floatingCallout = {
-  position: 'absolute', right: 36, bottom: 36,
-  background: '#fff', borderRadius: 16, padding: 18, width: 280,
-  boxShadow: '0 16px 40px rgba(0,0,0,0.25)'
-}
-const ownerRow = {
-  display: 'flex', alignItems: 'center', gap: 8,
-  padding: '8px 10px', background: '#F2F2F7', borderRadius: 8, marginBottom: 10
-}
-const solarMini = {
-  background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.2)',
-  borderRadius: 10, padding: 10,
-  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8
-}
-const solarMiniNum = { fontFamily: monoStack, fontSize: 14, fontWeight: 700, color: '#F59E0B' }
-const solarMiniLbl = { fontSize: 9, color: '#8E8E93' }
+const phonesSection = { padding: '16px 0 96px' }
 
-const section = { padding: '96px 0' }
+// CSS for the phone showcase — has to be a real stylesheet because of
+// the 3D transforms + media query. Inline styles can't express either.
+const phonesCss = `
+.phones-stage {
+  position: relative;
+  height: 720px;
+  perspective: 1800px;
+  perspective-origin: 50% 30%;
+}
+.phone {
+  border-radius: 42px;
+  background: #0a0b0c;
+  padding: 9px;
+  box-shadow:
+    0 0 0 2px #1f2024 inset,
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 30px 80px -16px rgba(15,23,42,0.55),
+    0 12px 30px -8px rgba(15,23,42,0.45);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.phone .screen {
+  width: 100%; height: 100%;
+  border-radius: 33px;
+  overflow: hidden;
+  background: #fff;
+  position: relative;
+}
+.phone .screen img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+.phone .glare {
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 35%, rgba(255,255,255,0) 70%, rgba(255,255,255,0.08) 100%);
+  pointer-events: none;
+  border-radius: 33px;
+}
+.phone .notch {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  width: 88px; height: 26px; border-radius: 999px;
+  background: #000; z-index: 2;
+}
+.phone--standing {
+  position: absolute;
+  left: 8%;
+  top: 50%;
+  width: 320px;
+  aspect-ratio: 9 / 19.5;
+  transform: translateY(-50%) rotateY(var(--ry, -14deg)) rotateX(2deg) rotateZ(-2deg);
+  transition: transform 600ms cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 3;
+}
+.phone--standing .shadow {
+  position: absolute;
+  bottom: -28px; left: 8%;
+  width: 84%; height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(15,23,42,0.32) 0%, rgba(15,23,42,0) 70%);
+  filter: blur(8px);
+  z-index: -1;
+}
+.phone--tabletop {
+  position: absolute;
+  right: 6%;
+  top: 50%;
+  width: 360px;
+  aspect-ratio: 9 / 19.5;
+  transform: translateY(-50%) rotateX(62deg) rotateZ(-22deg) rotateY(-4deg);
+  z-index: 2;
+}
+.phone--tabletop .shadow {
+  position: absolute;
+  bottom: -40px; left: -10%;
+  width: 120%; height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(15,23,42,0.35) 0%, rgba(15,23,42,0) 70%);
+  filter: blur(14px);
+  z-index: -1;
+}
+@media (max-width: 900px) {
+  .phones-stage {
+    height: auto;
+    display: flex; flex-direction: column;
+    gap: 64px; align-items: center; padding: 32px 0;
+  }
+  .phone--standing, .phone--tabletop {
+    position: relative; left: auto; right: auto; top: auto;
+    width: min(260px, 80vw);
+    transform: none;
+  }
+  .phone--tabletop { transform: rotateX(0) rotateZ(0); }
+}
+`
+
+const section = { padding: '32px 0 96px' }
 const h2Style = { fontSize: 'clamp(36px, 6vw, 56px)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.05, margin: '0 0 16px' }
 const sectionLead = { fontSize: 18, color: '#475569', maxWidth: 640, lineHeight: 1.55, marginBottom: 56 }
 
@@ -334,13 +415,14 @@ const featureTitle = { fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', 
 const featureBody = { fontSize: 15, color: '#475569', lineHeight: 1.55, margin: 0 }
 const featureStat = { fontFamily: monoStack, fontWeight: 600, color: '#F59E0B', fontSize: 14, marginTop: 16, display: 'inline-block' }
 
-const screenshotsGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }
-const screenshotFig = { margin: 0 }
-const screenshotImg = {
-  width: '100%', height: 'auto', borderRadius: 24,
-  boxShadow: '0 10px 30px rgba(15,23,42,0.18)', display: 'block'
+const dispoPills = { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 18 }
+const dispoPill = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  padding: '4px 10px 4px 6px', borderRadius: 999,
+  fontSize: 11, fontWeight: 600, color: '#1E293B',
+  background: '#fff', border: '1px solid #E2E8F0'
 }
-const screenshotCap = { marginTop: 12, fontSize: 13, color: '#64748B', textAlign: 'center' }
+const dispoSwatch = { width: 10, height: 10, borderRadius: '50%', flex: 'none' }
 
 const ctaStrip = { background: '#0A0A0A', color: '#FAFAF7', padding: '96px 0', textAlign: 'center' }
 const dataRow = {
