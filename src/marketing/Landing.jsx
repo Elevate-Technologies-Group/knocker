@@ -49,7 +49,7 @@ function Hero() {
         <h1 style={displayHeading}>Door-to-door,<br/>finally native.</h1>
         <p style={leadCopy}>
           Tap any house on the map. Get the homeowner's name from public county records.
-          See real solar potential pulled from Google's Solar API. Log a disposition,
+          See real solar potential per address. Log a disposition,
           drop a note, schedule the appointment if it earned one. Your map remembers
           everything forever.
         </p>
@@ -60,7 +60,7 @@ function Hero() {
         <div style={heroMeta}>
           <span><strong style={heroMetaStrong}>Native iOS</strong> · iPhone, iOS 17+</span>
           <span><strong style={heroMetaStrong}>6 county GIS sources</strong> chained for parcel data</span>
-          <span><strong style={heroMetaStrong}>Google Solar API</strong> for honest sun estimates</span>
+          <span><strong style={heroMetaStrong}>Median sun-hour estimates</strong> per address (not the optimistic max)</span>
         </div>
       </div>
     </header>
@@ -195,7 +195,7 @@ function FeaturesSection() {
           />
           <FeatureCard
             title="Honest solar estimates."
-            body="Pulled from Google's Solar API. We use the median sunshine quantile, not the optimistic max — so shaded roofs don't lie to you in the field."
+            body="Real per-address solar potential. We use the median sunshine quantile, not the optimistic max — so shaded roofs don't lie to you in the field."
             stat="median ≠ max"
           />
           <FeatureCard
