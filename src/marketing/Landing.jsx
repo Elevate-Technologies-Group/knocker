@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 export default function Landing() {
@@ -7,6 +7,7 @@ export default function Landing() {
       <NavBar />
       <Hero />
       <PhonesShowcase />
+      <LaunchVideo />
       <FeaturesSection />
       <ByTheNumbers />
       <Footer />
@@ -21,8 +22,8 @@ function NavBar() {
         <Logo />
         <div style={navLinks}>
           <a href="#how" style={navLink}>How it works</a>
-          <a href="#solar" style={navLink}>Solar intelligence</a>
-          <a href="#pricing" style={navLink}>Pricing</a>
+          <a href="#launch-video" style={navLink}>Watch it</a>
+          <a href="#free" style={navLink}>Free</a>
           <Link to="/manager" style={navLink}>Manager portal</Link>
         </div>
         <a style={btnPrimary} href="#download">Get Knocker</a>
@@ -134,6 +135,49 @@ function PhonesShowcase() {
   )
 }
 
+function LaunchVideo() {
+  const wrapRef = useRef(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    if (!wrapRef.current || mounted) return
+    const obs = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) {
+        setMounted(true)
+        obs.disconnect()
+      }
+    }, { rootMargin: '300px' })
+    obs.observe(wrapRef.current)
+    return () => obs.disconnect()
+  }, [mounted])
+
+  return (
+    <section id="launch-video" style={launchVideoSection}>
+      <div style={container}>
+        <div style={launchEyebrow}>30-second tour</div>
+        <h2 style={launchHeading}>Watch it work.</h2>
+        <p style={launchLead}>
+          Pin drops, owner lookup, solar estimate, disposition logged, pipeline updated —
+          end to end, in half a minute.
+        </p>
+        <div ref={wrapRef} style={launchFrame}>
+          {mounted ? (
+            <iframe
+              src="/launch/index.html"
+              title="Knocker — 30-second tour"
+              style={launchIframe}
+              loading="lazy"
+              allow="autoplay"
+            />
+          ) : (
+            <div style={launchPlaceholder}>Loading…</div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function FeaturesSection() {
   return (
     <section id="how" style={section}>
@@ -205,9 +249,9 @@ function DispositionPills() {
 
 function ByTheNumbers() {
   return (
-    <section id="pricing" style={ctaStrip}>
+    <section id="free" style={ctaStrip}>
       <div style={container}>
-        <div style={{ ...eyebrow, color: '#F59E0B' }}>Built by a solar org, for solar reps</div>
+        <div style={{ ...eyebrow, color: '#F59E0B' }}>Free during launch</div>
         <h2 style={{ ...h2Style, color: '#FAFAF7' }}>Built for the rep, by the route.</h2>
         <p style={{ ...leadCopy, color: 'rgba(250,250,247,0.7)', maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
           No SaaS adjectives. No "powerful, intuitive, seamless." Just the things you
@@ -221,7 +265,7 @@ function ByTheNumbers() {
         </div>
         <a style={btnAmber} href="#download">Get Knocker for iOS →</a>
         <p style={{ marginTop: 20, fontSize: 13, color: 'rgba(250,250,247,0.6)' }}>
-          App Store launch coming soon. Reach out at <a href="mailto:elevatetechnologiesgroup@gmail.com" style={{ color: '#F59E0B', textDecoration: 'underline' }}>elevatetechnologiesgroup@gmail.com</a> for early-access details.
+          Free for now — no card, no trial timer. Reach out at <a href="mailto:elevatetechnologiesgroup@gmail.com" style={{ color: '#F59E0B', textDecoration: 'underline' }}>elevatetechnologiesgroup@gmail.com</a> with feedback.
         </p>
       </div>
     </section>
@@ -401,6 +445,33 @@ const phonesCss = `
   .phone--tabletop { transform: rotateX(0) rotateZ(0); }
 }
 `
+
+const launchVideoSection = { padding: '32px 0 96px' }
+const launchEyebrow = { fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#F59E0B', marginBottom: 14 }
+const launchHeading = { fontSize: 'clamp(36px, 6vw, 56px)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.05, margin: '0 0 14px' }
+const launchLead = { fontSize: 18, color: '#475569', maxWidth: 640, lineHeight: 1.55, marginBottom: 36 }
+const launchFrame = {
+  position: 'relative',
+  width: '100%',
+  maxWidth: 720,
+  margin: '0 auto',
+  aspectRatio: '1 / 1',
+  borderRadius: 24,
+  overflow: 'hidden',
+  background: '#0a0a0a',
+  boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 24px 80px rgba(15,23,42,0.18)'
+}
+const launchIframe = {
+  position: 'absolute', inset: 0,
+  width: '100%', height: '100%',
+  border: 0,
+  display: 'block'
+}
+const launchPlaceholder = {
+  position: 'absolute', inset: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  color: 'rgba(250,250,247,0.5)', fontSize: 14
+}
 
 const section = { padding: '32px 0 96px' }
 const h2Style = { fontSize: 'clamp(36px, 6vw, 56px)', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.05, margin: '0 0 16px' }
