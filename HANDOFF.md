@@ -95,13 +95,16 @@ The iOS Settings screen has Account (email + display name + sign out), Active Te
 
 ## What's already done that you should NOT redo
 
-- `/manager` route is wired up: [`src/App.jsx`](src/App.jsx) routes, [`src/manager/ManagerApp.jsx`](src/manager/ManagerApp.jsx) auth + role check, [`src/manager/ManagerLogin.jsx`](src/manager/ManagerLogin.jsx) email OTP, [`src/manager/Dashboard.jsx`](src/manager/Dashboard.jsx) team pipeline + roster + recent activity feed.
+- `/manager` route is wired up: [`src/App.jsx`](src/App.jsx) routes, [`src/manager/ManagerApp.jsx`](src/manager/ManagerApp.jsx) auth + role check, [`src/manager/ManagerLogin.jsx`](src/manager/ManagerLogin.jsx) email OTP, [`src/manager/Dashboard.jsx`](src/manager/Dashboard.jsx) team pipeline + roster + activity feed (re-themed to match the brand portal mock — Inter + Geist Mono on Warm White, sidebar w/ team switcher, KPI cards, activity table, leaderboard panel).
+- [`src/manager/ErrorBoundary.jsx`](src/manager/ErrorBoundary.jsx) catches manager-portal render errors and surfaces stack + component tree instead of leaving a blank dark page.
+- ManagerApp uses **two explicit queries** (team_members, then teams.eq(id)) rather than a PostgREST `teams(...)` embed — the embed returns null under the current nested-RLS setup. **Don't switch back to the embed** unless you also rework the RLS policy chain.
 - React Router is installed and wrapped in `src/main.jsx`. SPA rewrites are in `vercel.json`.
 - All seven migrations under `supabase/migrations/` are applied to the live Supabase project. **Don't re-apply** — they're idempotent but pointless. To check what's applied: `supabase migration list --project-ref rxfpsuczmkhxetmzbppb` (or use the Supabase MCP / Management API).
 - Vite base path is now root (`vite.config.js` no longer has `base: '/knocker/'`). Don't add it back.
 - Vercel env vars are set on the project, not in `vercel.json`. The `env` block in `vercel.json` was misleading (it injects runtime env for serverless functions, not Vite build env). Removed.
 - `parcel-lookup` edge function is deployed to the Knocker Supabase project. iOS uses it via GET with query params + Bearer anon key. **iOS gateway requires JWT-format anon key, not `sb_publishable_*` keys** — keep that in mind if you ever rotate keys.
-- Custom OTP email template was set via Supabase Management API (mailer_otp_length=6, body shows the token prominently). Sender name still says "Supabase" — Resend SMTP setup is in flight, separate task.
+- Custom OTP email template (Knocker-branded, no `Open in Knocker` button — the button used to redirect web users mid-flow) is live in Supabase Auth. Sender is still Supabase default — Resend SMTP is **parked** until a domain is verified (intentional; backend swap doesn't require App Store review).
+- Vercel deploys are **manual** for now. From `~/Code/knocker-web`: `vercel --prod`. The Vercel project is not GitHub-OAuth-linked, so master pushes don't auto-deploy. Linking is one-click in the Vercel dashboard if you want it.
 
 ## Reference: iOS files most relevant to your work
 
