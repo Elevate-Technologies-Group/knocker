@@ -34,7 +34,7 @@ export default function Support() {
       <p>
         Teams share door data across the whole roster — managers and reps see
         the same map. To join a team, ask your team owner for the team slug
-        (a short identifier like <code style={code}>clean-grid-solar</code>),
+        (a short identifier like <code style={code}>acme-solar</code>),
         then enter it during sign-in.
       </p>
 
