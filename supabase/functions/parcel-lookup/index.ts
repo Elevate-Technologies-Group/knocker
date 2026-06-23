@@ -5,14 +5,12 @@
 //   2. Arizona ADWR Pima County parcels (confirmed working, no auth)
 //   3. ESRI USA_Parcels national fallback
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   // Accept lat/lng from either POST JSON body or GET query string so any
@@ -43,6 +41,7 @@ serve(async (req) => {
     await tryMassachusetts(lat, lng) ??
     await trySouthCarolina(lat, lng) ??
     await tryVirginia(lat, lng) ??
+    await tryPrinceGeorges(lat, lng) ??
     await tryArcGISNational(lat, lng)
 
   return new Response(JSON.stringify(result ?? { owner: null }), {
@@ -329,6 +328,60 @@ async function tryVirginia(lat: number, lng: number) {
     } catch (e) {
       console.warn('VA parcel lookup failed:', e)
     }
+  }
+  return null
+}
+
+// ── Prince George's County, MD (Brandywine, Waldorf-adjacent, DC suburbs) ───
+// Confirmed endpoint: gis.princegeorgescountymd.gov public ArcGIS, no auth.
+// Maryland's statewide SDAT layer omits owner names by policy; county-level
+// layers do publish them. PG County's Property_Flattened layer is the
+// authoritative parcel polygons + owner_name + structure data.
+async function tryPrinceGeorges(lat: number, lng: number) {
+  try {
+    const params = new URLSearchParams({
+      geometry: `${lng},${lat}`,
+      geometryType: 'esriGeometryPoint',
+      inSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects',
+      // 50m buffer in case the tapped lat/lng is on the roof and the parcel
+      // polygon is slightly inset / offset. Layer is polygons so an exact
+      // hit usually works without buffer, but this is forgiving.
+      distance: '50',
+      units: 'esriSRUnit_Meter',
+      outFields: 'OWNER_NAME,ICO_NAME,ACCOUNT,HOUSE_NUMBER,STREET_NAME,STREET_TYPE,CITY,ZIP5,YEAR_BUILT,STRUCTURE_SQ_FT,LAND_AREA_ACRE',
+      returnGeometry: 'false',
+      f: 'json',
+      resultRecordCount: '1',
+    })
+
+    const res = await fetch(
+      `https://gis.princegeorgescountymd.gov/arcgis/rest/services/Property/Property_Flattened/MapServer/0/query?${params}`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Knocker/1.0)',
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(6000),
+      }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const attrs = data?.features?.[0]?.attributes
+    if (!attrs) return null
+
+    const ownerRaw = attrs.OWNER_NAME || attrs.ICO_NAME
+    if (!ownerRaw) return null
+
+    return {
+      owner: cleanOwnerName(String(ownerRaw)),
+      source: 'prince_georges_md',
+      apn: attrs.ACCOUNT,
+      yearBuilt: attrs.YEAR_BUILT,
+      sqft: attrs.STRUCTURE_SQ_FT,
+    }
+  } catch (e) {
+    console.warn('PG County lookup failed:', e)
   }
   return null
 }
