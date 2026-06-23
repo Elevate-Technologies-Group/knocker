@@ -12,7 +12,7 @@ const STATUS_META = {
 
 const REP_AVATAR_COLORS = ['#F59E0B', '#06b6d4', '#22c55e', '#475569', '#a855f7', '#ef4444']
 
-export default function Dashboard({ session, team, role }) {
+export default function Dashboard({ team }) {
   const [members, setMembers] = useState([])
   const [doors, setDoors] = useState([])
   const [recentEvents, setRecentEvents] = useState([])
@@ -98,90 +98,31 @@ export default function Dashboard({ session, team, role }) {
   const maxDoors = Math.max(1, ...repStats.map(r => r.doors))
 
   return (
-    <div style={appStyle}>
-      <Sidebar team={team} role={role} session={session} />
-      <main style={mainStyle}>
-        <div style={topRow}>
-          <div>
-            <div style={crumbs}>{team.name} / Dashboard</div>
-            <h1 style={h1Style}>{formatToday()}</h1>
-          </div>
-          <div style={toolbar}>
-            <button style={ghostBtn} onClick={loadData}>↻ Refresh</button>
-          </div>
-        </div>
-
-        {error && <div style={errorBanner}>{error}</div>}
-
-        {loading && doors.length === 0 ? (
-          <div style={emptyMsg}>Loading team data…</div>
-        ) : (
-          <>
-            <KpiRow kpis={kpis} />
-            <div style={twoColGrid}>
-              <ActivityPanel events={recentEvents} repNameMap={repNameMap} doorAddrMap={Object.fromEntries(doors.map(d => [d.id, d.address]))} />
-              <LeaderboardPanel reps={repStats} maxDoors={maxDoors} />
-            </div>
-          </>
-        )}
-      </main>
-    </div>
-  )
-}
-
-function Sidebar({ team, role, session }) {
-  const myInitials = initialsOf(session.user.email || '?')
-  return (
-    <aside style={asideStyle}>
-      <div style={brandBlock}>
-        <div style={brandIcon}>🚪</div>
-        <div style={brandName}>knocker</div>
-        <div style={brandTag}>{role.toUpperCase()}</div>
-      </div>
-
-      <div style={teamSwitch}>
+    <div style={pageStyle}>
+      <div style={topRow}>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>{team.name}</div>
-          <div style={{ fontFamily: monoFamily, fontSize: 12, color: '#475569', marginTop: 2 }}>{team.slug}</div>
+          <div style={crumbs}>{team.name} / Dashboard</div>
+          <h1 style={h1Style}>{formatToday()}</h1>
+        </div>
+        <div style={toolbar}>
+          <button style={ghostBtn} onClick={loadData}>↻ Refresh</button>
         </div>
       </div>
 
-      <nav style={sideNav}>
-        <NavItem icon="▦" label="Dashboard" active />
-        <NavItem icon="👥" label="Reps" disabled />
-        <NavItem icon="📍" label="Territories" disabled />
-        <NavItem icon="📊" label="Pipeline" disabled />
-        <NavItem icon="📅" label="Appointments" disabled />
-        <div style={navGroup}>Settings</div>
-        <NavItem icon="⚙️" label="Team" disabled />
-        <NavItem icon="🔌" label="Integrations" disabled />
-      </nav>
+      {error && <div style={errorBanner}>{error}</div>}
 
-      <div style={meBlock}>
-        <div style={{ ...avatar, background: '#F59E0B', color: '#0A0A0A' }}>{myInitials}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {session.user.email}
+      {loading && doors.length === 0 ? (
+        <div style={emptyMsg}>Loading team data…</div>
+      ) : (
+        <>
+          <KpiRow kpis={kpis} />
+          <div style={twoColGrid}>
+            <ActivityPanel events={recentEvents} repNameMap={repNameMap} doorAddrMap={Object.fromEntries(doors.map(d => [d.id, d.address]))} />
+            <LeaderboardPanel reps={repStats} maxDoors={maxDoors} />
           </div>
-          <div style={{ fontSize: 11, color: '#64748B', textTransform: 'capitalize' }}>{role}</div>
-        </div>
-        <button onClick={() => supabase.auth.signOut()} style={signOutBtn} title="Sign out">↪</button>
-      </div>
-    </aside>
-  )
-}
-
-function NavItem({ icon, label, active, disabled }) {
-  return (
-    <a style={{
-      ...sideLink,
-      ...(active ? sideLinkActive : null),
-      ...(disabled ? sideLinkDisabled : null)
-    }}>
-      <span style={{ width: 18, textAlign: 'center' }}>{icon}</span>
-      <span>{label}</span>
-      {disabled && <span style={soonChip}>soon</span>}
-    </a>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -317,73 +258,14 @@ function formatTime(iso) {
 
 const monoFamily = "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
 
-const appStyle = {
-  display: 'grid', gridTemplateColumns: '240px 1fr',
-  minHeight: '100dvh', background: '#F8FAFC', color: '#1E293B',
-  fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14
-}
-
-const asideStyle = {
-  background: '#fff', borderRight: '1px solid #E2E8F0',
-  display: 'flex', flexDirection: 'column',
-  position: 'sticky', top: 0, height: '100dvh', overflow: 'auto'
-}
-
-const brandBlock = {
-  padding: '18px 18px 14px', display: 'flex', gap: 10, alignItems: 'center',
-  borderBottom: '1px solid #E2E8F0'
-}
-const brandIcon = {
-  width: 30, height: 30, background: '#0A0A0A', borderRadius: 7,
-  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16
-}
-const brandName = { fontWeight: 800, fontSize: 16, letterSpacing: '-0.01em' }
-const brandTag = {
-  marginLeft: 'auto', fontSize: 10, padding: '2px 6px',
-  background: '#F1F5F9', color: '#64748B', borderRadius: 4, fontWeight: 600
-}
-
-const teamSwitch = {
-  margin: '14px 12px 6px', padding: '10px 12px',
-  background: '#F1F5F9', borderRadius: 8
-}
-
-const sideNav = {
-  padding: 8, display: 'flex', flexDirection: 'column', gap: 2,
-  flex: 1, overflow: 'auto'
-}
-const sideLink = {
-  display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px',
-  textDecoration: 'none', color: '#475569', borderRadius: 8,
-  fontSize: 14, fontWeight: 500, cursor: 'pointer'
-}
-const sideLinkActive = { background: '#0F172A', color: '#fff' }
-const sideLinkDisabled = { color: '#94A3B8', cursor: 'not-allowed' }
-const navGroup = {
-  fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
-  textTransform: 'uppercase', color: '#94A3B8', padding: '12px 12px 4px'
-}
-const soonChip = {
-  marginLeft: 'auto', fontSize: 9, padding: '1px 6px',
-  background: '#F1F5F9', color: '#94A3B8', borderRadius: 4,
-  textTransform: 'uppercase', letterSpacing: 0.5
-}
-
-const meBlock = {
-  padding: 14, borderTop: '1px solid #E2E8F0',
-  display: 'flex', gap: 10, alignItems: 'center'
-}
+// Page wrapper — ManagerShell owns the chrome + sidebar; this is just the
+// dashboard body inside the right-hand column.
+const pageStyle = { padding: '24px 32px 64px', minWidth: 0 }
 const avatar = {
   width: 32, height: 32, borderRadius: '50%',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   fontWeight: 700, fontSize: 13, flexShrink: 0
 }
-const signOutBtn = {
-  background: 'transparent', border: 'none', color: '#64748B',
-  fontSize: 18, cursor: 'pointer', padding: '4px 6px'
-}
-
-const mainStyle = { padding: '24px 32px 64px', minWidth: 0 }
 const topRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }
 const crumbs = { fontSize: 13, color: '#64748B', marginBottom: 4 }
 const h1Style = { fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: '#0F172A' }

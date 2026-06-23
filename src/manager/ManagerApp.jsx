@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import ManagerLogin from './ManagerLogin'
 import Dashboard from './Dashboard'
+import CalendarsPage from './CalendarsPage'
+import ManagerShell from './ManagerShell'
 import ErrorBoundary from './ErrorBoundary'
 
 export default function ManagerApp() {
@@ -109,7 +112,14 @@ function ManagerAppInner() {
     return <FullScreenMessage>Loading team…</FullScreenMessage>
   }
 
-  return <Dashboard session={session} team={team} role={role} />
+  return (
+    <ManagerShell session={session} team={team} role={role}>
+      <Routes>
+        <Route index element={<Dashboard team={team} />} />
+        <Route path="calendars" element={<CalendarsPage session={session} team={team} role={role} />} />
+      </Routes>
+    </ManagerShell>
+  )
 }
 
 function FullScreenMessage({ children }) {
