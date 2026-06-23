@@ -42,8 +42,8 @@ function Sidebar({ team, role, session }) {
 
       <nav style={sideNav}>
         <NavLink to="/manager" icon="▦" label="Dashboard" active={isActive('/manager')} />
+        <NavLink to="/manager/reps" icon="👥" label="Reps" active={isActive('/manager/reps')} />
         <NavLink to="/manager/calendars" icon="📆" label="Calendars" active={isActive('/manager/calendars')} />
-        <NavItem icon="👥" label="Reps" disabled />
         <NavItem icon="📍" label="Territories" disabled />
         <NavItem icon="📊" label="Pipeline" disabled />
         <NavItem icon="📅" label="Appointments" disabled />

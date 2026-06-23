@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import ManagerLogin from './ManagerLogin'
 import Dashboard from './Dashboard'
 import CalendarsPage from './CalendarsPage'
+import RepsPage from './RepsPage'
 import ManagerShell from './ManagerShell'
 import ErrorBoundary from './ErrorBoundary'
 
@@ -116,6 +117,7 @@ function ManagerAppInner() {
     <ManagerShell session={session} team={team} role={role}>
       <Routes>
         <Route index element={<Dashboard team={team} />} />
+        <Route path="reps" element={<RepsPage session={session} team={team} role={role} />} />
         <Route path="calendars" element={<CalendarsPage session={session} team={team} role={role} />} />
       </Routes>
     </ManagerShell>
