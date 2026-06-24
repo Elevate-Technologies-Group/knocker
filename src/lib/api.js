@@ -100,13 +100,106 @@ export async function getHomeownerInfo(lat, lng, address) {
         }
       }
     )
-    if (!res.ok) return { owner: null }
+    if (!res.ok) return { owner: null, address: null, source: null }
     const data = await res.json()
-    return { owner: data.owner || null, source: data.source || null }
+    return {
+      owner: data.owner || null,
+      source: data.source || null,
+      address: data.address || null,
+    }
   } catch (e) {
     console.warn('Owner lookup failed:', e)
-    return { owner: null }
+    return { owner: null, address: null, source: null }
   }
+}
+
+// ─── Maryland county parcel layer fallback for house dots ────────────────────
+// OSM has incomplete coverage in rural MD (Loveville, Leonardtown, even parts
+// of Brandywine). The county GIS layers carry every parcel polygon with a
+// real address. We hit the working ones in parallel and merge their centroids
+// into the house-dot stream. Mirrors iOS MDCountyParcelService.
+//
+// Skipped when bbox is outside a loose MD bounding box so we don't fan out
+// requests anywhere else.
+
+const MD_BOUNDS = { minLat: 37.85, maxLat: 39.75, minLng: -79.55, maxLng: -74.95 }
+
+const MD_COUNTIES = [
+  {
+    url: 'https://services3.arcgis.com/oMyOi7kozGXYXHPr/arcgis/rest/services/Parcels/FeatureServer/0/query',
+    addressField: 'Address',
+  },
+  {
+    url: 'https://gis.princegeorgescountymd.gov/arcgis/rest/services/Property/Property_Flattened/MapServer/0/query',
+    addressField: 'ADDRESS',
+  },
+  {
+    url: 'https://services7.arcgis.com/3BMWkdyrt45RNCrq/arcgis/rest/services/Tax_Parcels/FeatureServer/0/query',
+    addressField: 'ADDRESS',
+  },
+]
+
+export async function fetchMDCountyHouses(bounds) {
+  const { _southWest: sw, _northEast: ne } = bounds
+  const cx = (sw.lat + ne.lat) / 2
+  const cy = (sw.lng + ne.lng) / 2
+  if (cx < MD_BOUNDS.minLat || cx > MD_BOUNDS.maxLat || cy < MD_BOUNDS.minLng || cy > MD_BOUNDS.maxLng) {
+    return []
+  }
+  const results = await Promise.all(MD_COUNTIES.map(c => fetchOneCounty(c, sw, ne)))
+  return results.flat()
+}
+
+async function fetchOneCounty(config, sw, ne) {
+  try {
+    const params = new URLSearchParams({
+      where: '1=1',
+      geometry: `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`,
+      geometryType: 'esriGeometryEnvelope',
+      inSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects',
+      outFields: config.addressField,
+      returnGeometry: 'true',
+      outSR: '4326',
+      f: 'json',
+      resultRecordCount: '500',
+    })
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 8000)
+    const res = await fetch(`${config.url}?${params}`, { signal: ctrl.signal })
+    clearTimeout(timer)
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.features || [])
+      .map(f => featureToHouse(f, config.addressField))
+      .filter(Boolean)
+  } catch (e) {
+    console.warn('MD county parcel fetch failed:', config.url, e?.message || e)
+    return []
+  }
+}
+
+function featureToHouse(feature, addressField) {
+  const attrs = feature.attributes || {}
+  const addrRaw = attrs[addressField]
+  if (!addrRaw) return null
+  const address = String(addrRaw).trim()
+  if (!address) return null
+
+  const geom = feature.geometry || {}
+  let lat, lng
+  if (Array.isArray(geom.rings) && geom.rings[0]?.length) {
+    const ring = geom.rings[0]
+    lng = ring.reduce((s, p) => s + p[0], 0) / ring.length
+    lat = ring.reduce((s, p) => s + p[1], 0) / ring.length
+  } else if (typeof geom.x === 'number' && typeof geom.y === 'number') {
+    lng = geom.x
+    lat = geom.y
+  } else {
+    return null
+  }
+  if (!isFinite(lat) || !isFinite(lng)) return null
+  return { lat, lng, address }
 }
 
 // ─── Doors ─────────────────────────────────────────────────────────────────
@@ -135,9 +228,14 @@ export async function logDoor({
     ...(team_id ? { team_id } : {}),
   }
 
+  // The doors table's unique constraint is (user_id, address) with NULLS
+  // NOT DISTINCT — so the upsert conflict has to match those two columns,
+  // not the old single-address constraint that no longer exists. Hitting
+  // the wrong on_conflict was the silent cause of "couldn't save" on the
+  // web app right after the schema migration.
   const { data, error } = await supabase
     .from('doors')
-    .upsert(row, { onConflict: 'address', ignoreDuplicates: false })
+    .upsert(row, { onConflict: 'user_id,address', ignoreDuplicates: false })
     .select()
     .single()
 

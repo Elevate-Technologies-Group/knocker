@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { getDoors, subscribeToDoorsSession, reverseGeocode, getSolarData, logDoor, getHomeownerInfo } from '../lib/api'
+import { getDoors, subscribeToDoorsSession, reverseGeocode, getSolarData, logDoor, getHomeownerInfo, fetchMDCountyHouses } from '../lib/api'
 import { DOOR_STATUSES, STATUS_ORDER, normaliseStatus } from '../lib/constants'
 import DoorModal from './DoorModal'
 import StatusLegend from './StatusLegend'
@@ -39,9 +39,25 @@ function makeHouseDotIcon() {
   })
 }
 
+// Pulls house dots from OpenStreetMap (Overpass) AND the Maryland county
+// parcel layers in parallel, then dedupes. Overpass is fast where OSM has
+// good building coverage; the parcel layers fill rural-MD gaps (Loveville,
+// Leonardtown, parts of Brandywine) where OSM has almost no addr:housenumber
+// and barely any building footprints. Mirrors iOS OverpassServiceWrapper.
 async function fetchNearbyHouses(bounds) {
+  const [osm, md] = await Promise.all([
+    fetchOSMHouses(bounds).catch(e => { console.warn('Overpass error:', e); return [] }),
+    fetchMDCountyHouses(bounds).catch(e => { console.warn('MD parcel error:', e); return [] }),
+  ])
+  return mergeHouses(osm, md)
+}
+
+async function fetchOSMHouses(bounds) {
   const { _southWest: sw, _northEast: ne } = bounds
-  const query = `[out:json][timeout:10];(node["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng});way["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng}););out center 200;`
+  // Two-track Overpass query: addressed buildings PLUS building footprints
+  // without explicit addresses (catches rural areas where OSM has few
+  // addr:housenumber tags).
+  const query = `[out:json][timeout:15];(node["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng});way["addr:housenumber"](${sw.lat},${sw.lng},${ne.lat},${ne.lng});way["building"~"^(yes|residential|house|detached|semidetached_house|terrace|farm|cabin|bungalow|mobile_home)$"](${sw.lat},${sw.lng},${ne.lat},${ne.lng}););out center 500;`
   const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query })
   const data = await res.json()
   return data.elements.map(el => {
@@ -52,6 +68,26 @@ async function fetchNearbyHouses(bounds) {
     return { lat, lng, address: addr || `${lat?.toFixed(5)}, ${lng?.toFixed(5)}` }
   }).filter(h => h.lat && h.lng)
 }
+
+/** Merge OSM + parcel houses. ~10m grid dedup; parcel wins because its
+ *  address is the real assessor address, not a lat/lng fallback. */
+function mergeHouses(osm, parcel) {
+  if (parcel.length === 0) return osm
+  const key = (h) => `${h.lat.toFixed(4)},${h.lng.toFixed(4)}`
+  const seen = new Set()
+  const out = []
+  for (const p of parcel) {
+    const k = key(p)
+    if (!seen.has(k)) { seen.add(k); out.push(p) }
+  }
+  for (const o of osm) {
+    const k = key(o)
+    if (!seen.has(k)) { seen.add(k); out.push(o) }
+  }
+  return out
+}
+
+const looksLikeLatLng = (s) => typeof s === 'string' && /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(s.trim())
 
 // GPS blue dot — auto-centers ONCE on first location, then lets user scroll freely
 function GpsMarker() {
@@ -216,7 +252,18 @@ export default function KnockerMap({ repName, sessionId, userId, teamId, teamNam
         getSolarData(house.lat, house.lng),
         getHomeownerInfo(house.lat, house.lng, house.address)
       ])
-      setPendingPin({ ...house, solar, owner_name: ownerInfo?.owner || null })
+      // When OSM only had a lat/lng for this building (rural-MD case) and
+      // the parcel record carries a real street address, prefer that for
+      // the modal + saved door row.
+      const address = looksLikeLatLng(house.address) && ownerInfo?.address
+        ? ownerInfo.address
+        : house.address
+      setPendingPin({
+        ...house,
+        address,
+        solar,
+        owner_name: ownerInfo?.owner || null,
+      })
     } catch (e) { console.error(e) }
     setLoading(false)
   }
@@ -228,7 +275,13 @@ export default function KnockerMap({ repName, sessionId, userId, teamId, teamNam
     try {
       const [address, solar] = await Promise.all([reverseGeocode(lat, lng), getSolarData(lat, lng)])
       const ownerInfo = await getHomeownerInfo(lat, lng, address)
-      setPendingPin({ lat, lng, address, solar, owner_name: ownerInfo?.owner || null })
+      // Same fallback rule for free-form map clicks: if reverseGeocode
+      // returned a lat/lng pair and the parcel has a real address, use the
+      // parcel one.
+      const finalAddress = looksLikeLatLng(address) && ownerInfo?.address
+        ? ownerInfo.address
+        : address
+      setPendingPin({ lat, lng, address: finalAddress, solar, owner_name: ownerInfo?.owner || null })
     } catch (err) { console.error(err) }
     setLoading(false)
   }
